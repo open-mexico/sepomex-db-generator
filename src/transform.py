@@ -6,31 +6,30 @@ def normalizar_datos(df_crudo: pd.DataFrame):
     print("⚙️ Normalizando datos...")
 
     # Renombrar columnas clave
-    df = df_crudo.rename(columns={
-        'd_codigo': 'codigo',
-        'd_asenta': 'nombre',
-        'd_tipo_asenta': 'tipo',
-        'd_ciudad': 'ciudad',
-        'd_zona': 'zona',
-        'c_estado': 'estado_id',
-        'c_mnpio': 'municipio_id'
-    })
+    df = df_crudo.rename(
+        columns={
+            "d_codigo": "codigo",
+            "d_asenta": "nombre",
+            "d_tipo_asenta": "tipo",
+            "d_ciudad": "ciudad",
+            "d_zona": "zona",
+            "c_estado": "estado_id",
+            "c_mnpio": "municipio_id",
+        }
+    )
 
     # 1. Tabla Estados
-    estados = df[['estado_id', 'd_estado']].copy()
-    estados = estados.rename(columns={'estado_id': 'id', 'd_estado': 'nombre'})
-    estados = estados.drop_duplicates().sort_values(by='id')
+    estados = df[["estado_id", "d_estado"]].copy()
+    estados = estados.rename(columns={"estado_id": "id", "d_estado": "nombre"})
+    estados = estados.drop_duplicates().sort_values(by="id")
 
     # 2. Tabla Municipios
-    municipios = df[['municipio_id', 'D_mnpio', 'estado_id']].copy()
-    municipios = municipios.rename(
-        columns={'municipio_id': 'id', 'D_mnpio': 'nombre'})
-    municipios = municipios.drop_duplicates().sort_values(by=[
-        'estado_id', 'id'])
+    municipios = df[["municipio_id", "D_mnpio", "estado_id"]].copy()
+    municipios = municipios.rename(columns={"municipio_id": "id", "D_mnpio": "nombre"})
+    municipios = municipios.drop_duplicates().sort_values(by=["estado_id", "id"])
 
     # 3. Tabla Colonias
-    columnas_colonia = ['codigo', 'nombre', 'tipo',
-                        'ciudad', 'zona', 'estado_id', 'municipio_id']
+    columnas_colonia = ["codigo", "nombre", "tipo", "ciudad", "zona", "estado_id", "municipio_id"]
     colonias = df[columnas_colonia].copy()
 
     return estados, municipios, colonias
