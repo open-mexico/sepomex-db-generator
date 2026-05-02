@@ -21,7 +21,7 @@ def guardar_db_postal(estados: pd.DataFrame, municipios: pd.DataFrame, colonias:
 
 
 def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd.DataFrame, ruta_db: str, ruta_geojson: str):
-    """Crea la base de datos geoespacial inyectando los polígonos."""
+    """Crea la base de datos geoespacial inyectando los polígonos por Código Postal."""
     print(f"🌍 Creando {ruta_db} y cruzando con GeoJSON...")
     if os.path.exists(ruta_db):
         os.remove(ruta_db)
@@ -43,6 +43,8 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
         archivos = glob.glob(f'{ruta_geojson}/**/*.geojson', recursive=True)
 
         total_actualizadas = 0
+        codigos_no_encontrados = set()
+
         for archivo in archivos:
             with open(archivo, 'r', encoding='utf-8') as f:
                 datos = json.load(f)
@@ -50,14 +52,33 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
                     propiedades = feature.get('properties', {})
                     geometria = feature.get('geometry', {})
 
-                    nombre = str(propiedades.get('nombre', '')).upper()
-                    cp = str(propiedades.get('cp', ''))
+                    # 1. Extraer el código postal (se llama 'd_codigo' en el GeoJSON)
+                    cp_crudo = propiedades.get('d_codigo')
 
+                    if cp_crudo is None:
+                        continue  # Saltamos si no hay código
+
+                    # 2. Formatear el CP a string de 5 dígitos (ej. 20049 -> "20049", 1000 -> "01000")
+                    cp_str = str(cp_crudo).zfill(5)
+
+                    geometria_json = json.dumps(geometria)
+
+                    # 3. Actualizar TODAS las colonias que compartan ese Código Postal
                     cursor.execute("""
                         UPDATE colonias 
                         SET geometria = ? 
-                        WHERE codigo = ? AND UPPER(nombre) = ?
-                    """, (json.dumps(geometria), cp, nombre))
-                    total_actualizadas += cursor.rowcount
+                        WHERE codigo = ?
+                    """, (geometria_json, cp_str))
 
-        print(f"🗺️ Se inyectaron {total_actualizadas} polígonos.")
+                    filas_afectadas = cursor.rowcount
+                    total_actualizadas += filas_afectadas
+
+                    # Opcional: Registrar si un CP del mapa no existe en SEPOMEX
+                    if filas_afectadas == 0:
+                        codigos_no_encontrados.add(cp_str)
+
+        conn.commit()
+        print(f"🗺️ Se inyectó la geometría a {total_actualizadas} colonias.")
+        if codigos_no_encontrados:
+            print(
+                f"⚠️ Nota: {len(codigos_no_encontrados)} códigos del mapa no se encontraron en SEPOMEX.")
