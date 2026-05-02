@@ -1,0 +1,3 @@
+[submodule "datos_geojson"]
+	path = datos_geojson
+	url = https://github.com/open-mexico/mexico-geojson.git
