@@ -81,6 +81,22 @@ Para ejecutar las pruebas:
 pytest -v
 ```
 
+## 🎨 Formato y Lint
+El proyecto valida estilo y calidad de código con `black` y `ruff`.
+
+Para ejecutar las validaciones localmente:
+
+```bash
+ruff check .
+black --check .
+```
+
+Si deseas autoformatear el código:
+
+```bash
+black .
+```
+
 ## 🔍 Palabras Clave
 - Códigos postales México
 - SEPOMEX base de datos
