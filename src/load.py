@@ -5,8 +5,31 @@ import sqlite3
 import pandas as pd
 
 
+def crear_indices(conn):
+    """Función auxiliar para crear todos los índices de alto rendimiento en la BD."""
+    # Índices para la tabla Colonias
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo ON colonias(codigo);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_nombre ON colonias(nombre COLLATE NOCASE);")
+
+    # Índices Compuestos (Para búsquedas filtradas por estado)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_nombre ON colonias(estado_id, nombre COLLATE NOCASE);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo ON colonias(estado_id, codigo);")
+
+    # Índices para la tabla Municipios y Estados
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_municipio_estado ON municipios(estado_id);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_municipio_nombre ON municipios(nombre COLLATE NOCASE);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_estado_nombre ON estados(nombre COLLATE NOCASE);")
+
+
 def guardar_db_postal(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd.DataFrame, ruta_db: str):
-    """Crea la base de datos relacional ligera."""
+    """Crea la base de datos relacional ligera con índices."""
     print(f"💾 Creando {ruta_db}...")
     if os.path.exists(ruta_db):
         os.remove(ruta_db)
@@ -16,8 +39,7 @@ def guardar_db_postal(estados: pd.DataFrame, municipios: pd.DataFrame, colonias:
         municipios.to_sql('municipios', conn, if_exists='append', index=False)
         colonias.to_sql('colonias', conn, if_exists='append', index=False)
 
-        conn.execute("CREATE INDEX idx_colonia_nombre ON colonias(nombre);")
-        conn.execute("CREATE INDEX idx_colonia_codigo ON colonias(codigo);")
+        crear_indices(conn)
 
 
 def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd.DataFrame, ruta_db: str, ruta_geojson: str):
@@ -34,10 +56,11 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
         municipios.to_sql('municipios', conn, if_exists='append', index=False)
         colonias_geo.to_sql('colonias', conn, if_exists='append', index=False)
 
+        crear_indices(conn)
+
+        # Índice exclusivo para GeoJSON (Para buscar rápido las que SÍ tienen mapa)
         conn.execute(
-            "CREATE INDEX idx_colonia_nombre_geo ON colonias(nombre);")
-        conn.execute(
-            "CREATE INDEX idx_colonia_codigo_geo ON colonias(codigo);")
+            "CREATE INDEX IF NOT EXISTS idx_geometria_not_null ON colonias(codigo) WHERE geometria IS NOT NULL;")
 
         cursor = conn.cursor()
         archivos = glob.glob(f'{ruta_geojson}/**/*.geojson', recursive=True)
@@ -52,18 +75,17 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
                     propiedades = feature.get('properties', {})
                     geometria = feature.get('geometry', {})
 
-                    # 1. Extraer el código postal (se llama 'd_codigo' en el GeoJSON)
+                    # Extraer el código postal (se llama 'd_codigo' en tu GeoJSON)
                     cp_crudo = propiedades.get('d_codigo')
 
                     if cp_crudo is None:
-                        continue  # Saltamos si no hay código
+                        continue
 
-                    # 2. Formatear el CP a string de 5 dígitos (ej. 20049 -> "20049", 1000 -> "01000")
+                    # Formatear a 5 dígitos
                     cp_str = str(cp_crudo).zfill(5)
-
                     geometria_json = json.dumps(geometria)
 
-                    # 3. Actualizar TODAS las colonias que compartan ese Código Postal
+                    # Actualizar TODAS las colonias que compartan ese Código Postal
                     cursor.execute("""
                         UPDATE colonias 
                         SET geometria = ? 
@@ -73,12 +95,8 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
                     filas_afectadas = cursor.rowcount
                     total_actualizadas += filas_afectadas
 
-                    # Opcional: Registrar si un CP del mapa no existe en SEPOMEX
                     if filas_afectadas == 0:
                         codigos_no_encontrados.add(cp_str)
 
         conn.commit()
         print(f"🗺️ Se inyectó la geometría a {total_actualizadas} colonias.")
-        if codigos_no_encontrados:
-            print(
-                f"⚠️ Nota: {len(codigos_no_encontrados)} códigos del mapa no se encontraron en SEPOMEX.")
