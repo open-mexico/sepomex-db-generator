@@ -14,8 +14,8 @@ def main():
     estados, municipios, colonias = normalizar_datos(df_crudo)
 
     # 3. Cargar
-    guardar_db_postal(estados, municipios, colonias, "db_postal.sqlite")
-    guardar_db_geo(estados, municipios, colonias, "db_geo.sqlite", RUTA_GEOJSON)
+    guardar_db_postal(estados, municipios, colonias, "dist/db_postal.sqlite")
+    guardar_db_geo(estados, municipios, colonias, "dist/db_geo.sqlite", RUTA_GEOJSON)
 
     print("✅ ¡Bases de datos generadas exitosamente!")
 

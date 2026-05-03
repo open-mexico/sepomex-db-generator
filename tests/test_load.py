@@ -39,10 +39,19 @@ def test_guardar_db_postal_crea_indices(tmp_path):
         cursor.execute("SELECT name FROM sqlite_master WHERE type='index';")
         indices = [fila[0] for fila in cursor.fetchall()]
 
-        # Verificamos que se hayan creado
+        # Índices de colonias
         assert "idx_colonia_codigo" in indices
+        assert "idx_colonia_nombre" in indices
+        assert "idx_colonia_codigo_nombre" in indices
         assert "idx_colonia_estado_nombre" in indices
+        assert "idx_colonia_estado_codigo" in indices
+        assert "idx_colonia_municipio_nombre" in indices
+        assert "idx_colonia_municipio_codigo" in indices
+
+        # Índices de municipios y estados
         assert "idx_municipio_estado" in indices
+        assert "idx_municipio_nombre" in indices
+        assert "idx_estado_nombre" in indices
 
 
 def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
@@ -62,6 +71,7 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
                 "type": "Feature",
                 "properties": {"d_codigo": 20049},  # Ojo: Es un número entero en tu archivo
                 "geometry": {"type": "Polygon", "coordinates": [[[-102.321, 21.890], [-102.325, 21.893]]]},
+                "bbox": [-102.325, 21.890, -102.321, 21.893],
             }
         ],
     }
@@ -76,19 +86,38 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
     with sqlite3.connect(ruta_db) as conn:
         cursor = conn.cursor()
 
-        # 1. Verificar índice de GeoJSON
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_geometria_not_null';")
-        assert cursor.fetchone() is not None, "El índice idx_geometria_not_null debe existir"
+        # 1. Verificar índices de GeoJSON
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index';")
+        indices = [fila[0] for fila in cursor.fetchall()]
+        assert "idx_colonia_geo_not_null" in indices, "El índice idx_colonia_geo_not_null debe existir"
+        assert "idx_colonia_bbox" in indices, "El índice idx_colonia_bbox debe existir"
+        assert "idx_colonia_centro" in indices, "El índice idx_colonia_centro debe existir"
+        assert "idx_colonia_estado_bbox" in indices
+        assert "idx_colonia_municipio_bbox" in indices
 
         # 2. Verificar que AMBAS colonias con el CP 20049 recibieron la geometría
-        cursor.execute("SELECT nombre, geometria FROM colonias WHERE codigo = '20049'")
+        cursor.execute(
+            "SELECT nombre, geometria, min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat FROM colonias WHERE codigo = '20049'"
+        )
         resultados = cursor.fetchall()
 
         assert len(resultados) == 2, "Deben existir dos colonias con este CP"
 
         for fila in resultados:
-            geometria_guardada = fila[1]
-            assert geometria_guardada is not None, f"La colonia {fila[0]} no recibió geometría"
+            nombre, geometria_guardada, min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat = fila
+            assert geometria_guardada is not None, f"La colonia {nombre} no recibió geometría"
 
             geo_dict = json.loads(geometria_guardada)
             assert geo_dict["type"] == "Polygon"
+
+            # 3. Verificar que el BBox se almacenó correctamente
+            assert min_lon == -102.325, f"min_lon incorrecto para {nombre}"
+            assert min_lat == 21.890, f"min_lat incorrecto para {nombre}"
+            assert max_lon == -102.321, f"max_lon incorrecto para {nombre}"
+            assert max_lat == 21.893, f"max_lat incorrecto para {nombre}"
+
+            # 4. Verificar que el centroide se calculó
+            assert centro_lon is not None, f"centro_lon no calculado para {nombre}"
+            assert centro_lat is not None, f"centro_lat no calculado para {nombre}"
+            assert abs(centro_lon - (-102.323)) < 0.001
+            assert abs(centro_lat - 21.8915) < 0.001
