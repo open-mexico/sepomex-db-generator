@@ -3,7 +3,8 @@ from src.utils import calcular_centroide
 
 def test_calcular_centroide_valores_validos():
     """Prueba que el centroide se calcule correctamente dados cuatro límites."""
-    centro_lat, centro_lon = calcular_centroide(-102.325, 21.890, -102.321, 21.893)
+    centro_lat, centro_lon = calcular_centroide(
+        -102.325, 21.890, -102.321, 21.893)
 
     assert abs(centro_lat - 21.8915) < 0.0001
     assert abs(centro_lon - (-102.323)) < 0.0001

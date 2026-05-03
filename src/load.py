@@ -11,35 +11,48 @@ from utils import calcular_centroide
 def crear_indices(conn):
     """Función auxiliar para crear todos los índices de alto rendimiento en la BD."""
     # Índices para la tabla Colonias
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_colonia_codigo ON colonias(codigo);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_colonia_nombre ON colonias(nombre COLLATE NOCASE);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_colonia_codigo_nombre ON colonias(codigo, nombre COLLATE NOCASE);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo ON colonias(codigo);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_nombre ON colonias(nombre COLLATE NOCASE);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo_nombre ON colonias(codigo, nombre COLLATE NOCASE);")
 
     # Índices Compuestos (Para búsquedas filtradas por estado)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_colonia_estado_nombre ON colonias(estado_id, nombre COLLATE NOCASE);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo ON colonias(estado_id, codigo);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_nombre ON colonias(estado_id, nombre COLLATE NOCASE);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo ON colonias(estado_id, codigo);")
 
     # Índices Compuestos (Para búsquedas filtradas por municipio)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_colonia_municipio_nombre ON colonias(municipio_id, nombre COLLATE NOCASE);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo ON colonias(municipio_id, codigo);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_nombre ON colonias(municipio_id, nombre COLLATE NOCASE);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo ON colonias(municipio_id, codigo);")
 
     # Índices para la tabla Municipios y Estados
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_municipio_estado ON municipios(estado_id);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_municipio_nombre ON municipios(nombre COLLATE NOCASE);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_estado_nombre ON estados(nombre COLLATE NOCASE);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_municipio_estado ON municipios(estado_id);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_municipio_nombre ON municipios(nombre COLLATE NOCASE);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_estado_nombre ON estados(nombre COLLATE NOCASE);")
 
 
 def crear_indices_geo(conn):
     """Índices específicos para la tabla Colonias con geometría."""
 
     # Filtro rápido para saber cuáles tienen mapa (Ej. ?solo_geo=true)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_colonia_geo_not_null ON colonias(codigo) WHERE geometria IS NOT NULL;")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_geo_not_null ON colonias(codigo) WHERE geometria IS NOT NULL;")
 
     # BBox: Para búsqueda por coordenadas (Geocodificación Inversa)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_colonia_bbox ON colonias(min_lat, max_lat, min_lon, max_lon);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_bbox ON colonias(min_lat, max_lat, min_lon, max_lon);")
 
     # Ideal si el frontend ya sabe en qué estado está el usuario y solo quiere colonias cercanas dentro de ese límite político.
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_colonia_estado_bbox ON colonias(estado_id, min_lat, max_lat, min_lon, max_lon);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_bbox ON colonias(estado_id, min_lat, max_lat, min_lon, max_lon);")
 
     # Extremadamente rápido si cruzamos coordenadas acotadas a un municipio en particular.
     conn.execute(
@@ -47,7 +60,8 @@ def crear_indices_geo(conn):
     )
 
     # CENTROIDE: Para búsquedas de "Nearest Neighbors" (Cercanía) o clustering
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_colonia_centro ON colonias(centro_lat, centro_lon);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_centro ON colonias(centro_lat, centro_lon);")
 
 
 def guardar_db_postal(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd.DataFrame, ruta_db: str):
@@ -119,7 +133,8 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
                     # Si el polígono trae BBox, extraemos los límites y calculamos el centro
                     if bbox and len(bbox) == 4:
                         min_lon, min_lat, max_lon, max_lat = bbox
-                        centro_lat, centro_lon = calcular_centroide(min_lon, min_lat, max_lon, max_lat)
+                        centro_lat, centro_lon = calcular_centroide(
+                            min_lon, min_lat, max_lon, max_lat)
 
                     # Actualizar TODAS las colonias que compartan ese Código Postal
                     cursor.execute(
@@ -130,7 +145,8 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
                             centro_lon = ?, centro_lat = ?
                         WHERE codigo = ?
                     """,
-                        (geometria_json, min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat, cp_str),
+                        (geometria_json, min_lon, min_lat, max_lon,
+                         max_lat, centro_lon, centro_lat, cp_str),
                     )
 
                     filas_afectadas = cursor.rowcount
@@ -143,4 +159,5 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
         print(f"🗺️ Se inyectó la geometría a {total_actualizadas} colonias.")
 
         if codigos_no_encontrados:
-            print(f"⚠️ No se encontraron geometrías para los siguientes códigos postales: {', '.join(codigos_no_encontrados)}")
+            print(
+                f"⚠️ No se encontraron geometrías para los siguientes códigos postales: {', '.join(codigos_no_encontrados)}")

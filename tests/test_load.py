@@ -8,7 +8,8 @@ from src.load import guardar_db_geo, guardar_db_postal
 
 def generar_datos_prueba():
     estados = pd.DataFrame({"id": ["01"], "nombre": ["Aguascalientes"]})
-    municipios = pd.DataFrame({"id": ["001"], "nombre": ["Aguascalientes"], "estado_id": ["01"]})
+    municipios = pd.DataFrame(
+        {"id": ["001"], "nombre": ["Aguascalientes"], "estado_id": ["01"]})
 
     # Creamos DOS colonias con el MISMO código postal para probar la actualización masiva
     colonias = pd.DataFrame(
@@ -69,7 +70,8 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
         "features": [
             {
                 "type": "Feature",
-                "properties": {"d_codigo": 20049},  # Ojo: Es un número entero en tu archivo
+                # Ojo: Es un número entero en tu archivo
+                "properties": {"d_codigo": 20049},
                 "geometry": {"type": "Polygon", "coordinates": [[[-102.321, 21.890], [-102.325, 21.893]]]},
                 "bbox": [-102.325, 21.890, -102.321, 21.893],
             }
@@ -80,7 +82,8 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
         json.dump(datos_geojson, f)
 
     # Ejecutamos
-    guardar_db_geo(estados, municipios, colonias, str(ruta_db), str(ruta_geojson_dir))
+    guardar_db_geo(estados, municipios, colonias,
+                   str(ruta_db), str(ruta_geojson_dir))
 
     # Verificamos
     with sqlite3.connect(ruta_db) as conn:
