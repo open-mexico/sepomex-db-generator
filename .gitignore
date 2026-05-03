@@ -331,5 +331,11 @@ ASALocalRun/
 
 *.DS_Store
 
+# Output directories
+dist/
 *.sqlite
 *.db
+*.zip
+*.rar
+*.7z
+*.log
