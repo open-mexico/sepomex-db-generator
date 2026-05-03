@@ -124,3 +124,54 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
             assert centro_lat is not None, f"centro_lat no calculado para {nombre}"
             assert abs(centro_lon - (-102.323)) < 0.001
             assert abs(centro_lat - 21.8915) < 0.001
+
+
+def test_guardar_db_geo_no_pierde_bbox_si_hay_duplicados_incompletos(tmp_path):
+    """Si un CP aparece repetido, conserva el payload más completo con bbox."""
+    estados, municipios, colonias = generar_datos_prueba()
+
+    ruta_db = tmp_path / "test_geo_duplicados.sqlite"
+    ruta_geojson_dir = tmp_path / "datos_geojson"
+    ruta_geojson_dir.mkdir()
+
+    archivo_falso = ruta_geojson_dir / "01-Ags_test.geojson"
+    datos_geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"d_codigo": 20049},
+                "geometry": {"type": "Polygon", "coordinates": [[[-102.321, 21.890], [-102.325, 21.893]]]},
+                "bbox": [-102.325, 21.890, -102.321, 21.893],
+            },
+            {
+                "type": "Feature",
+                "properties": {"d_codigo": 20049},
+                "geometry": {"type": "Polygon", "coordinates": [[[-102.320, 21.891], [-102.324, 21.894]]]},
+                # Este duplicado no trae bbox y no debe borrar datos válidos anteriores
+            },
+        ],
+    }
+
+    with open(archivo_falso, "w", encoding="utf-8") as f:
+        json.dump(datos_geojson, f)
+
+    guardar_db_geo(estados, municipios, colonias,
+                   str(ruta_db), str(ruta_geojson_dir))
+
+    with sqlite3.connect(ruta_db) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat FROM colonias WHERE codigo = '20049'"
+        )
+        resultados = cursor.fetchall()
+
+        assert len(resultados) == 2
+
+        for min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat in resultados:
+            assert min_lon == -102.325
+            assert min_lat == 21.890
+            assert max_lon == -102.321
+            assert max_lat == 21.893
+            assert centro_lon is not None
+            assert centro_lat is not None

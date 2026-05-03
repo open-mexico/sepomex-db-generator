@@ -127,7 +127,8 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
             "CREATE INDEX IF NOT EXISTS idx_colonia_codigo ON colonias(codigo);")
 
         cursor = conn.cursor()
-        archivos = glob.glob(f"{ruta_geojson}/**/*.geojson", recursive=True)
+        archivos = sorted(
+            glob.glob(f"{ruta_geojson}/**/*.geojson", recursive=True))
 
         total_actualizadas = 0
         codigos_no_encontrados = set()
@@ -160,7 +161,7 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
                         centro_lat, centro_lon = calcular_centroide(
                             min_lon, min_lat, max_lon, max_lat)
 
-                    actualizaciones_por_cp[cp_str] = (
+                    nuevo_payload = (
                         geometria_json,
                         min_lon,
                         min_lat,
@@ -169,6 +170,21 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
                         centro_lon,
                         centro_lat,
                     )
+                    payload_existente = actualizaciones_por_cp.get(cp_str)
+
+                    if payload_existente is None:
+                        actualizaciones_por_cp[cp_str] = nuevo_payload
+                    else:
+                        # Conservamos el payload más completo (con BBox/centroide)
+                        bbox_existente = payload_existente[1:5]
+                        bbox_nuevo = nuevo_payload[1:5]
+                        existente_tiene_bbox = all(
+                            v is not None for v in bbox_existente)
+                        nuevo_tiene_bbox = all(
+                            v is not None for v in bbox_nuevo)
+
+                        if nuevo_tiene_bbox and not existente_tiene_bbox:
+                            actualizaciones_por_cp[cp_str] = nuevo_payload
 
         # Ejecutamos solo una actualización por CP para evitar reescrituras repetidas.
         for cp_str, payload in actualizaciones_por_cp.items():
