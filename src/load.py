@@ -8,6 +8,14 @@ import pandas as pd
 from utils import calcular_centroide
 
 
+def configurar_sqlite_para_carga(conn: sqlite3.Connection):
+    """Ajustes seguros para acelerar cargas batch en procesos ETL locales."""
+    conn.execute("PRAGMA journal_mode = OFF;")
+    conn.execute("PRAGMA synchronous = OFF;")
+    conn.execute("PRAGMA temp_store = MEMORY;")
+    conn.execute("PRAGMA cache_size = -200000;")
+
+
 def crear_indices(conn):
     """Función auxiliar para crear todos los índices de alto rendimiento en la BD."""
     # Índices para la tabla Colonias
@@ -67,13 +75,21 @@ def crear_indices_geo(conn):
 def guardar_db_postal(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd.DataFrame, ruta_db: str):
     """Crea la base de datos relacional ligera con índices."""
     print(f"💾 Creando {ruta_db}...")
+    dir_salida = os.path.dirname(ruta_db)
+    if dir_salida:
+        os.makedirs(dir_salida, exist_ok=True)
     if os.path.exists(ruta_db):
         os.remove(ruta_db)
 
     with sqlite3.connect(ruta_db) as conn:
-        estados.to_sql("estados", conn, if_exists="append", index=False)
-        municipios.to_sql("municipios", conn, if_exists="append", index=False)
-        colonias.to_sql("colonias", conn, if_exists="append", index=False)
+        configurar_sqlite_para_carga(conn)
+
+        estados.to_sql("estados", conn, if_exists="append",
+                       index=False, method="multi", chunksize=10_000)
+        municipios.to_sql("municipios", conn, if_exists="append",
+                          index=False, method="multi", chunksize=10_000)
+        colonias.to_sql("colonias", conn, if_exists="append",
+                        index=False, method="multi", chunksize=10_000)
 
         crear_indices(conn)
 
@@ -81,6 +97,9 @@ def guardar_db_postal(estados: pd.DataFrame, municipios: pd.DataFrame, colonias:
 def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd.DataFrame, ruta_db: str, ruta_geojson: str):
     """Crea la base de datos geoespacial inyectando los polígonos por Código Postal."""
     print(f"🌍 Creando {ruta_db} y cruzando con GeoJSON...")
+    dir_salida = os.path.dirname(ruta_db)
+    if dir_salida:
+        os.makedirs(dir_salida, exist_ok=True)
     if os.path.exists(ruta_db):
         os.remove(ruta_db)
 
@@ -94,20 +113,25 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
     colonias_geo["centro_lat"] = float("nan")
 
     with sqlite3.connect(ruta_db) as conn:
-        estados.to_sql("estados", conn, if_exists="append", index=False)
-        municipios.to_sql("municipios", conn, if_exists="append", index=False)
-        colonias_geo.to_sql("colonias", conn, if_exists="append", index=False)
+        configurar_sqlite_para_carga(conn)
 
-        crear_indices(conn)
+        estados.to_sql("estados", conn, if_exists="append",
+                       index=False, method="multi", chunksize=10_000)
+        municipios.to_sql("municipios", conn, if_exists="append",
+                          index=False, method="multi", chunksize=10_000)
+        colonias_geo.to_sql("colonias", conn, if_exists="append",
+                            index=False, method="multi", chunksize=10_000)
 
-        # Índice exclusivo para GeoJSON (Para buscar rápido las que SÍ tienen mapa)
-        crear_indices_geo(conn)
+        # Para la fase de UPDATE solo necesitamos el índice por código postal.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_colonia_codigo ON colonias(codigo);")
 
         cursor = conn.cursor()
         archivos = glob.glob(f"{ruta_geojson}/**/*.geojson", recursive=True)
 
         total_actualizadas = 0
         codigos_no_encontrados = set()
+        actualizaciones_por_cp = {}
 
         for archivo in archivos:
             with open(archivo, "r", encoding="utf-8") as f:
@@ -136,24 +160,38 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
                         centro_lat, centro_lon = calcular_centroide(
                             min_lon, min_lat, max_lon, max_lat)
 
-                    # Actualizar TODAS las colonias que compartan ese Código Postal
-                    cursor.execute(
-                        """
-                        UPDATE colonias 
-                        SET geometria = ?, 
-                            min_lon = ?, min_lat = ?, max_lon = ?, max_lat = ?,
-                            centro_lon = ?, centro_lat = ?
-                        WHERE codigo = ?
-                    """,
-                        (geometria_json, min_lon, min_lat, max_lon,
-                         max_lat, centro_lon, centro_lat, cp_str),
+                    actualizaciones_por_cp[cp_str] = (
+                        geometria_json,
+                        min_lon,
+                        min_lat,
+                        max_lon,
+                        max_lat,
+                        centro_lon,
+                        centro_lat,
                     )
 
-                    filas_afectadas = cursor.rowcount
-                    total_actualizadas += filas_afectadas
+        # Ejecutamos solo una actualización por CP para evitar reescrituras repetidas.
+        for cp_str, payload in actualizaciones_por_cp.items():
+            cursor.execute(
+                """
+                UPDATE colonias
+                SET geometria = ?,
+                    min_lon = ?, min_lat = ?, max_lon = ?, max_lat = ?,
+                    centro_lon = ?, centro_lat = ?
+                WHERE codigo = ?
+            """,
+                (*payload, cp_str),
+            )
 
-                    if filas_afectadas == 0:
-                        codigos_no_encontrados.add(cp_str)
+            filas_afectadas = cursor.rowcount
+            total_actualizadas += filas_afectadas
+
+            if filas_afectadas == 0:
+                codigos_no_encontrados.add(cp_str)
+
+        # Creamos el resto de índices al final para acelerar la carga inicial.
+        crear_indices(conn)
+        crear_indices_geo(conn)
 
         conn.commit()
         print(f"🗺️ Se inyectó la geometría a {total_actualizadas} colonias.")
