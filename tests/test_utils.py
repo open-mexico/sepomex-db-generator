@@ -1,4 +1,4 @@
-from src.utils import calcular_centroide
+from src.utils import calcular_centroide, limpiar_texto
 
 
 def test_calcular_centroide_valores_validos():
@@ -25,3 +25,27 @@ def test_calcular_centroide_coordenadas_simetricas():
 
     assert centro_lat == 0.0
     assert centro_lon == 0.0
+
+
+def test_limpiar_texto_elimina_acentos():
+    """Prueba que la función elimine correctamente los acentos de un texto."""
+    texto_con_acentos = "Cancún, México"
+    texto_limpio = limpiar_texto(texto_con_acentos)
+
+    assert texto_limpio == "cancun, mexico"
+
+
+def test_limpiar_texto_mayusculas_a_minusculas():
+    """Prueba que la función convierta mayúsculas a minúsculas."""
+    texto_mayusculas = "CIUDAD DE MÉXICO"
+    texto_limpio = limpiar_texto(texto_mayusculas)
+
+    assert texto_limpio == "ciudad de mexico"
+
+
+def test_limpiar_texto_elimina_enes():
+    """Prueba que la función elimine correctamente las eñes de un texto."""
+    texto_con_ene = "Peña Nieto"
+    texto_limpio = limpiar_texto(texto_con_ene)
+
+    assert texto_limpio == "pena nieto"

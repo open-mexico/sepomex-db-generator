@@ -26,15 +26,24 @@ def crear_indices(conn):
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_colonia_codigo_nombre ON colonias(codigo, nombre COLLATE NOCASE);")
 
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_nombre_norm ON colonias(nombre_normalizado);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo_nombre_norm ON colonias(codigo, nombre_normalizado);")
+
     # Índices Compuestos (Para búsquedas filtradas por estado)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_colonia_estado_nombre ON colonias(estado_id, nombre COLLATE NOCASE);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_nombre_norm ON colonias(estado_id, nombre_normalizado);")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo ON colonias(estado_id, codigo);")
 
     # Índices Compuestos (Para búsquedas filtradas por municipio)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_nombre ON colonias(municipio_id, nombre COLLATE NOCASE);")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_nombre_norm ON colonias(municipio_id, nombre_normalizado);")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo ON colonias(municipio_id, codigo);")
 

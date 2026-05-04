@@ -1,5 +1,25 @@
 import os
+import pandas as pd
 from datetime import datetime
+import unicodedata
+
+
+def limpiar_texto(texto):
+    """
+    Convierte a minúsculas y elimina acentos/diacríticos de un texto
+    para facilitar comparaciones y búsquedas.
+
+    No se usa `unaccent` de SQLite ya que puede requerir configuración adicional
+    """
+    if pd.isna(texto):
+        return ""
+
+    # Quita los acentos usando unicodedata
+    texto_nfd = unicodedata.normalize('NFD', str(texto))
+    # Filtra y se queda solo con los caracteres base (quita el "´")
+    texto_limpio = ''.join(
+        c for c in texto_nfd if unicodedata.category(c) != 'Mn')
+    return texto_limpio.lower().strip()
 
 
 def guardar_errores_en_archivo(codigos_no_encontrados: set, ruta_base: str = "dist"):
