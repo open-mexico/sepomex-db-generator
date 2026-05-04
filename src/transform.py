@@ -1,5 +1,5 @@
 import pandas as pd
-from .utils import limpiar_texto
+from utils import limpiar_texto
 
 
 def normalizar_datos(df_crudo: pd.DataFrame):
