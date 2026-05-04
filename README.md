@@ -1,4 +1,5 @@
-# 🇲🇽 MexPost Data: Base de Datos de Códigos Postales y GeoJSON de México (SEPOMEX)
+# 🇲🇽 MexPost Data
+# Base de Datos de Códigos Postales y GeoJSON de México (SEPOMEX)
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![SQLite](https://img.shields.io/badge/SQLite-Optimized-lightgrey.svg)](https://www.sqlite.org/)
