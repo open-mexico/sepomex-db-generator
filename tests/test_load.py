@@ -21,6 +21,7 @@ def generar_datos_prueba():
             "zona": ["Urbano", "Urbano"],
             "estado_id": ["01", "01"],
             "municipio_id": ["001", "001"],
+            "nombre_normalizado": ["colonia centro", "barrio de san marcos"],
         }
     )
     return estados, municipios, colonias
@@ -234,6 +235,7 @@ def test_guardar_db_geo_log_errores_en_flujo_completo(tmp_path):
             "zona": ["Urbano", "Urbano"],
             "estado_id": ["01", "01"],
             "municipio_id": ["001", "001"],
+            "nombre_normalizado": ["colonia ficticia", "barrio inexistente"],
         })
     ], ignore_index=True)
 
