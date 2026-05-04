@@ -339,3 +339,5 @@ dist/
 *.rar
 *.7z
 *.log
+
+.venv/
