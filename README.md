@@ -52,8 +52,8 @@ Proporcionar una fuente de verdad **reproducible**, **actualizable** y **lista p
 | Tabla | Columnas clave | Descripción |
 |---|---|---|
 | `estados` | `id`, `nombre` | 32 entidades federativas de México |
-| `municipios` | `id`, `nombre`, `estado_id` | Municipios vinculados a su estado |
-| `colonias` | `codigo`, `nombre`, `tipo`, `ciudad`, `zona`, `estado_id`, `municipio_id` | Asentamientos con su código postal |
+| `municipios` | `id`, `nombre`, `estado_id`, `nombre_normalizado` | Municipios vinculados a su estado |
+| `colonias` | `codigo`, `nombre`, `tipo`, `ciudad`, `zona`, `estado_id`, `municipio_id`, `nombre_normalizado` | Asentamientos con su código postal |
 
 ### Columnas adicionales en `db_geo.sqlite`
 
@@ -70,7 +70,7 @@ Proporcionar una fuente de verdad **reproducible**, **actualizable** y **lista p
 * **Python 3.12+** — Lenguaje principal del pipeline ETL
 * **Pandas** — Normalización, limpieza y carga masiva de datos
 * **SQLite3** — Motor de base de datos embebida con índices avanzados
-* **Pytest** — Suite de pruebas unitarias (10+ casos de prueba)
+* **Pytest** — Suite de pruebas unitarias (13 casos de prueba)
 * **Ruff + Black** — Linting y formateo de código
 * **Git Submodules** — Gestión de la dependencia de archivos GeoJSON
 
@@ -148,7 +148,7 @@ LIMIT 5;
 
 ## 🧪 Pruebas Unitarias
 
-El proyecto cuenta con una suite de pruebas que cubre normalización de datos, creación de índices, inyección de geometría, manejo de duplicados y generación del log de auditoría — sin necesidad de conexión a internet.
+El proyecto cuenta con una suite de 13 pruebas que cubre normalización de datos, creación de índices, inyección de geometría, manejo de duplicados, normalización de texto y generación del log de auditoría — sin necesidad de conexión a internet.
 
 ```bash
 pytest -v
