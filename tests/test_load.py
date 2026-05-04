@@ -8,8 +8,7 @@ from src.load import guardar_db_geo, guardar_db_postal
 
 def generar_datos_prueba():
     estados = pd.DataFrame({"id": ["01"], "nombre": ["Aguascalientes"]})
-    municipios = pd.DataFrame(
-        {"id": ["001"], "nombre": ["Aguascalientes"], "estado_id": ["01"]})
+    municipios = pd.DataFrame({"id": ["001"], "nombre": ["Aguascalientes"], "estado_id": ["01"]})
 
     # Creamos DOS colonias con el MISMO código postal para probar la actualización masiva
     colonias = pd.DataFrame(
@@ -83,8 +82,7 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
         json.dump(datos_geojson, f)
 
     # Ejecutamos
-    guardar_db_geo(estados, municipios, colonias,
-                   str(ruta_db), str(ruta_geojson_dir))
+    guardar_db_geo(estados, municipios, colonias, str(ruta_db), str(ruta_geojson_dir))
 
     # Verificamos
     with sqlite3.connect(ruta_db) as conn:
@@ -157,14 +155,11 @@ def test_guardar_db_geo_no_pierde_bbox_si_hay_duplicados_incompletos(tmp_path):
     with open(archivo_falso, "w", encoding="utf-8") as f:
         json.dump(datos_geojson, f)
 
-    guardar_db_geo(estados, municipios, colonias,
-                   str(ruta_db), str(ruta_geojson_dir))
+    guardar_db_geo(estados, municipios, colonias, str(ruta_db), str(ruta_geojson_dir))
 
     with sqlite3.connect(ruta_db) as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat FROM colonias WHERE codigo = '20049'"
-        )
+        cursor.execute("SELECT min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat FROM colonias WHERE codigo = '20049'")
         resultados = cursor.fetchall()
 
         assert len(resultados) == 2
@@ -225,22 +220,26 @@ def test_guardar_db_geo_log_errores_en_flujo_completo(tmp_path):
         json.dump(datos_geojson, f)
 
     # Agregar colonias sin geometría
-    colonias_extendidas = pd.concat([
-        colonias,
-        pd.DataFrame({
-            "codigo": ["99999", "88888"],
-            "nombre": ["Colonia Ficticia", "Barrio Inexistente"],
-            "tipo": ["Colonia", "Barrio"],
-            "ciudad": ["Aguascalientes", "Aguascalientes"],
-            "zona": ["Urbano", "Urbano"],
-            "estado_id": ["01", "01"],
-            "municipio_id": ["001", "001"],
-            "nombre_normalizado": ["colonia ficticia", "barrio inexistente"],
-        })
-    ], ignore_index=True)
+    colonias_extendidas = pd.concat(
+        [
+            colonias,
+            pd.DataFrame(
+                {
+                    "codigo": ["99999", "88888"],
+                    "nombre": ["Colonia Ficticia", "Barrio Inexistente"],
+                    "tipo": ["Colonia", "Barrio"],
+                    "ciudad": ["Aguascalientes", "Aguascalientes"],
+                    "zona": ["Urbano", "Urbano"],
+                    "estado_id": ["01", "01"],
+                    "municipio_id": ["001", "001"],
+                    "nombre_normalizado": ["colonia ficticia", "barrio inexistente"],
+                }
+            ),
+        ],
+        ignore_index=True,
+    )
 
-    guardar_db_geo(estados, municipios, colonias_extendidas,
-                   str(ruta_db), str(ruta_geojson_dir))
+    guardar_db_geo(estados, municipios, colonias_extendidas, str(ruta_db), str(ruta_geojson_dir))
 
     # El log debe existir en el mismo directorio que la BD
     ruta_output_dir = ruta_db.parent

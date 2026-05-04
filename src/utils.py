@@ -15,10 +15,9 @@ def limpiar_texto(texto):
         return ""
 
     # Quita los acentos usando unicodedata
-    texto_nfd = unicodedata.normalize('NFD', str(texto))
+    texto_nfd = unicodedata.normalize("NFD", str(texto))
     # Filtra y se queda solo con los caracteres base (quita el "´")
-    texto_limpio = ''.join(
-        c for c in texto_nfd if unicodedata.category(c) != 'Mn')
+    texto_limpio = "".join(c for c in texto_nfd if unicodedata.category(c) != "Mn")
     return texto_limpio.lower().strip()
 
 
@@ -33,8 +32,7 @@ def guardar_errores_en_archivo(codigos_no_encontrados: set, ruta_base: str = "di
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(ruta_archivo, "a", encoding="utf-8") as f:
         f.write(f"\n--- Ejecución: {timestamp} ---\n")
-        f.write(
-            f"Códigos postales sin geometría: {len(codigos_no_encontrados)}\n")
+        f.write(f"Códigos postales sin geometría: {len(codigos_no_encontrados)}\n")
         for cp in sorted(codigos_no_encontrados):
             f.write(f"  {cp}\n")
 

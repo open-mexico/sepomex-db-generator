@@ -26,16 +26,12 @@ def normalizar_datos(df_crudo: pd.DataFrame):
 
     # 2. Tabla Municipios
     municipios = df[["municipio_id", "D_mnpio", "estado_id"]].copy()
-    municipios = municipios.rename(
-        columns={"municipio_id": "id", "D_mnpio": "nombre"})
-    municipios = municipios.drop_duplicates().sort_values(by=[
-        "estado_id", "id"])
-    municipios["nombre_normalizado"] = municipios["nombre"].apply(
-        limpiar_texto)
+    municipios = municipios.rename(columns={"municipio_id": "id", "D_mnpio": "nombre"})
+    municipios = municipios.drop_duplicates().sort_values(by=["estado_id", "id"])
+    municipios["nombre_normalizado"] = municipios["nombre"].apply(limpiar_texto)
 
     # 3. Tabla Colonias
-    columnas_colonia = ["codigo", "nombre", "tipo",
-                        "ciudad", "zona", "estado_id", "municipio_id"]
+    columnas_colonia = ["codigo", "nombre", "tipo", "ciudad", "zona", "estado_id", "municipio_id"]
     colonias = df[columnas_colonia].copy()
 
     colonias["nombre_normalizado"] = colonias["nombre"].apply(limpiar_texto)
