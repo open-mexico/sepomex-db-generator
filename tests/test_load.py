@@ -175,3 +175,77 @@ def test_guardar_db_geo_no_pierde_bbox_si_hay_duplicados_incompletos(tmp_path):
             assert max_lat == 21.893
             assert centro_lon is not None
             assert centro_lat is not None
+
+
+def test_guardar_db_geo_crea_log_de_errores(tmp_path):
+    """Si hay CPs sin geometría, se genera un archivo de log."""
+    from src.utils import guardar_errores_en_archivo
+
+    ruta_log = tmp_path / "errores.log"
+    codigos_faltantes = {"12345", "67890", "11111"}
+
+    # Pasamos el directorio donde guardar el log
+    guardar_errores_en_archivo(codigos_faltantes, str(tmp_path))
+
+    # El archivo debe existir con el nombre correcto
+    archivo_log = tmp_path / "db_geo_errores.log"
+    assert archivo_log.exists()
+
+    contenido = archivo_log.read_text(encoding="utf-8")
+    assert "Códigos postales sin geometría: 3" in contenido
+    assert "12345" in contenido
+    assert "67890" in contenido
+    assert "11111" in contenido
+    assert "Ejecución:" in contenido
+
+
+def test_guardar_db_geo_log_errores_en_flujo_completo(tmp_path):
+    """Simula el flujo completo con CPs en DB pero sin geometría en GeoJSON."""
+    estados, municipios, colonias = generar_datos_prueba()
+
+    ruta_db = tmp_path / "test_geo_log.sqlite"
+    ruta_geojson_dir = tmp_path / "datos_geojson"
+    ruta_geojson_dir.mkdir()
+
+    archivo_falso = ruta_geojson_dir / "01-Ags_test.geojson"
+    datos_geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"d_codigo": 20049},
+                "geometry": {"type": "Polygon", "coordinates": [[[-102.321, 21.890]]]},
+                "bbox": [-102.325, 21.890, -102.321, 21.893],
+            }
+        ],
+    }
+
+    with open(archivo_falso, "w", encoding="utf-8") as f:
+        json.dump(datos_geojson, f)
+
+    # Agregar colonias sin geometría
+    colonias_extendidas = pd.concat([
+        colonias,
+        pd.DataFrame({
+            "codigo": ["99999", "88888"],
+            "nombre": ["Colonia Ficticia", "Barrio Inexistente"],
+            "tipo": ["Colonia", "Barrio"],
+            "ciudad": ["Aguascalientes", "Aguascalientes"],
+            "zona": ["Urbano", "Urbano"],
+            "estado_id": ["01", "01"],
+            "municipio_id": ["001", "001"],
+        })
+    ], ignore_index=True)
+
+    guardar_db_geo(estados, municipios, colonias_extendidas,
+                   str(ruta_db), str(ruta_geojson_dir))
+
+    # El log debe existir en el mismo directorio que la BD
+    ruta_output_dir = ruta_db.parent
+    archivo_log_esperado = ruta_output_dir / "db_geo_errores.log"
+    assert archivo_log_esperado.exists()
+
+    contenido = archivo_log_esperado.read_text(encoding="utf-8")
+    assert "99999" in contenido
+    assert "88888" in contenido
+    assert "Códigos postales sin geometría: 2" in contenido

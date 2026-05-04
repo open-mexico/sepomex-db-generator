@@ -5,7 +5,7 @@ import sqlite3
 
 import pandas as pd
 
-from utils import calcular_centroide
+from utils import calcular_centroide, guardar_errores_en_archivo
 
 
 def configurar_sqlite_para_carga(conn: sqlite3.Connection):
@@ -205,6 +205,13 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
             if filas_afectadas == 0:
                 codigos_no_encontrados.add(cp_str)
 
+        # Identificar CPs en la BD que nunca aparecieron en el GeoJSON
+        cursor.execute("SELECT DISTINCT codigo FROM colonias")
+        todos_codigos_bd = {fila[0] for fila in cursor.fetchall()}
+        codigos_sin_geometria = todos_codigos_bd - \
+            set(actualizaciones_por_cp.keys())
+        codigos_no_encontrados.update(codigos_sin_geometria)
+
         # Creamos el resto de índices al final para acelerar la carga inicial.
         crear_indices(conn)
         crear_indices_geo(conn)
@@ -213,5 +220,7 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
         print(f"🗺️ Se inyectó la geometría a {total_actualizadas} colonias.")
 
         if codigos_no_encontrados:
+            ruta_output_dir = os.path.dirname(ruta_db) or "dist"
+            guardar_errores_en_archivo(codigos_no_encontrados, ruta_output_dir)
             print(
-                f"⚠️ No se encontraron geometrías para los siguientes códigos postales: {', '.join(codigos_no_encontrados)}")
+                f"⚠️ No se encontraron geometrías para {len(codigos_no_encontrados)} códigos postales. Ver: {ruta_output_dir}/db_geo_errores.log")
