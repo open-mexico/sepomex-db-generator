@@ -1,9 +1,10 @@
-from src.utils import calcular_centroide, limpiar_texto
+from src.utils import calcular_centroide, generar_id_codigo_postal, limpiar_texto
 
 
 def test_calcular_centroide_valores_validos():
     """Prueba que el centroide se calcule correctamente dados cuatro límites."""
-    centro_lat, centro_lon = calcular_centroide(-102.325, 21.890, -102.321, 21.893)
+    centro_lat, centro_lon = calcular_centroide(
+        -102.325, 21.890, -102.321, 21.893)
 
     assert abs(centro_lat - 21.8915) < 0.0001
     assert abs(centro_lon - (-102.323)) < 0.0001
@@ -48,3 +49,21 @@ def test_limpiar_texto_elimina_enes():
     texto_limpio = limpiar_texto(texto_con_ene)
 
     assert texto_limpio == "pena nieto"
+
+
+def test_generar_id_codigo_postal_formato_estable():
+    """El ID debe derivarse de estado + CP + nombre normalizado con padding fijo."""
+    assert generar_id_codigo_postal(
+        "9", "1000", "San Ángel") == "0901000_san_angel"
+    assert generar_id_codigo_postal(
+        "09", "01000", "san angel") == "0901000_san_angel"
+
+
+def test_generar_id_codigo_postal_distingue_colonias_mismo_cp_y_estado():
+    """Colonias distintas con mismo CP/estado deben tener IDs distintos."""
+    id_1 = generar_id_codigo_postal("01", "20049", "Colonia Centro")
+    id_2 = generar_id_codigo_postal("01", "20049", "Barrio de San Marcos")
+
+    assert id_1 == "0120049_colonia_centro"
+    assert id_2 == "0120049_barrio_de_san_marcos"
+    assert id_1 != id_2

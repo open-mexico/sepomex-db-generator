@@ -8,7 +8,8 @@ from src.load import guardar_db_geo, guardar_db_postal
 
 def generar_datos_prueba():
     estados = pd.DataFrame({"id": ["01"], "nombre": ["Aguascalientes"]})
-    municipios = pd.DataFrame({"id": ["001"], "nombre": ["Aguascalientes"], "estado_id": ["01"]})
+    municipios = pd.DataFrame(
+        {"id": ["001"], "nombre": ["Aguascalientes"], "estado_id": ["01"]})
 
     # Creamos DOS colonias con el MISMO código postal para probar la actualización masiva
     colonias = pd.DataFrame(
@@ -20,6 +21,7 @@ def generar_datos_prueba():
             "zona": ["Urbano", "Urbano"],
             "estado_id": ["01", "01"],
             "municipio_id": ["001", "001"],
+            "codigo_id": ["0120049_colonia_centro", "0120049_barrio_de_san_marcos"],
             "nombre_normalizado": ["colonia centro", "barrio de san marcos"],
         }
     )
@@ -41,13 +43,20 @@ def test_guardar_db_postal_crea_indices(tmp_path):
         indices = [fila[0] for fila in cursor.fetchall()]
 
         # Índices de colonias
+        assert "idx_colonia_codigo_id" in indices
+        assert "idx_colonia_estado_codigo_id" in indices
+        assert "idx_colonia_municipio_codigo_id" in indices
         assert "idx_colonia_codigo" in indices
         assert "idx_colonia_nombre" in indices
         assert "idx_colonia_codigo_nombre" in indices
         assert "idx_colonia_estado_nombre" in indices
         assert "idx_colonia_estado_codigo" in indices
+        assert "idx_colonia_estado_codigo_nombre_norm" in indices
+        assert "idx_colonia_estado_codigo_nombre" in indices
         assert "idx_colonia_municipio_nombre" in indices
         assert "idx_colonia_municipio_codigo" in indices
+        assert "idx_colonia_municipio_codigo_nombre_norm" in indices
+        assert "idx_colonia_municipio_codigo_nombre" in indices
 
         # Índices de municipios y estados
         assert "idx_municipio_estado" in indices
@@ -82,7 +91,8 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
         json.dump(datos_geojson, f)
 
     # Ejecutamos
-    guardar_db_geo(estados, municipios, colonias, str(ruta_db), str(ruta_geojson_dir))
+    guardar_db_geo(estados, municipios, colonias,
+                   str(ruta_db), str(ruta_geojson_dir))
 
     # Verificamos
     with sqlite3.connect(ruta_db) as conn:
@@ -99,14 +109,18 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
 
         # 2. Verificar que AMBAS colonias con el CP 20049 recibieron la geometría
         cursor.execute(
-            "SELECT nombre, geometria, min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat FROM colonias WHERE codigo = '20049'"
+            "SELECT nombre, codigo_id, geometria, min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat FROM colonias WHERE codigo = '20049'"
         )
         resultados = cursor.fetchall()
 
         assert len(resultados) == 2, "Deben existir dos colonias con este CP"
 
+        codigo_ids = {fila[1] for fila in resultados}
+        assert codigo_ids == {"0120049_colonia_centro",
+                              "0120049_barrio_de_san_marcos"}
+
         for fila in resultados:
-            nombre, geometria_guardada, min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat = fila
+            nombre, codigo_id, geometria_guardada, min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat = fila
             assert geometria_guardada is not None, f"La colonia {nombre} no recibió geometría"
 
             geo_dict = json.loads(geometria_guardada)
@@ -155,11 +169,13 @@ def test_guardar_db_geo_no_pierde_bbox_si_hay_duplicados_incompletos(tmp_path):
     with open(archivo_falso, "w", encoding="utf-8") as f:
         json.dump(datos_geojson, f)
 
-    guardar_db_geo(estados, municipios, colonias, str(ruta_db), str(ruta_geojson_dir))
+    guardar_db_geo(estados, municipios, colonias,
+                   str(ruta_db), str(ruta_geojson_dir))
 
     with sqlite3.connect(ruta_db) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat FROM colonias WHERE codigo = '20049'")
+        cursor.execute(
+            "SELECT min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat FROM colonias WHERE codigo = '20049'")
         resultados = cursor.fetchall()
 
         assert len(resultados) == 2
@@ -232,6 +248,7 @@ def test_guardar_db_geo_log_errores_en_flujo_completo(tmp_path):
                     "zona": ["Urbano", "Urbano"],
                     "estado_id": ["01", "01"],
                     "municipio_id": ["001", "001"],
+                    "codigo_id": ["0199999_colonia_ficticia", "0188888_barrio_inexistente"],
                     "nombre_normalizado": ["colonia ficticia", "barrio inexistente"],
                 }
             ),
@@ -239,7 +256,8 @@ def test_guardar_db_geo_log_errores_en_flujo_completo(tmp_path):
         ignore_index=True,
     )
 
-    guardar_db_geo(estados, municipios, colonias_extendidas, str(ruta_db), str(ruta_geojson_dir))
+    guardar_db_geo(estados, municipios, colonias_extendidas,
+                   str(ruta_db), str(ruta_geojson_dir))
 
     # El log debe existir en el mismo directorio que la BD
     ruta_output_dir = ruta_db.parent
