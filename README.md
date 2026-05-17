@@ -76,6 +76,29 @@ Variables de entorno opcionales:
 - `GEOJSON_PATH`: ruta al directorio local de GeoJSON.
 - `OUTPUT_DIR`: directorio de salida para las bases generadas.
 
+## Modelo de Datos para Busqueda
+
+El proceso ETL agrega una relacion explicita entre colonias y municipios para hacer
+consultas mas rapidas y precisas:
+
+- `municipios.municipio_uid`: identificador unico estable con formato `{estado_id}-{municipio_id}-{nombre_municipio_normalizado}`.
+- `colonias.municipio_uid`: clave de relacion directa hacia `municipios.municipio_uid`.
+- `colonias.codigo_id`: identificador unico estable por estado + codigo postal + nombre normalizado.
+- `vw_colonias_busqueda`: vista lista para consulta que incluye nombre de colonia y nombre de municipio.
+
+Para proteger integridad de datos, la base crea restricciones mediante indices `UNIQUE` en:
+
+- `colonias(codigo_id)`
+- `municipios(municipio_uid)`
+
+Ejemplo de consulta:
+
+```sql
+SELECT codigo, colonia_nombre, municipio_nombre
+FROM vw_colonias_busqueda
+WHERE codigo = '01000' AND colonia_nombre_normalizado = 'san angel';
+```
+
 ## Pruebas y Controles de Calidad
 
 ```bash

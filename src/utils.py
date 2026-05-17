@@ -15,8 +15,7 @@ def limpiar_texto(texto: object) -> str:
         return ""
 
     texto_nfd = unicodedata.normalize("NFD", str(texto))
-    texto_limpio = "".join(
-        char for char in texto_nfd if unicodedata.category(char) != "Mn")
+    texto_limpio = "".join(char for char in texto_nfd if unicodedata.category(char) != "Mn")
     return texto_limpio.lower().strip()
 
 
@@ -32,19 +31,41 @@ def generar_id_codigo_postal(
     estado_str = str(estado_id).strip().zfill(2)
     codigo_str = str(codigo).strip().zfill(5)
 
-    nombre_str = ""
-    if not pd.isna(nombre):
-        nombre_limpio = limpiar_texto(nombre)
-        nombre_str = "".join(char if char.isalnum()
-                             else "_" for char in nombre_limpio)
-        nombre_str = "_".join(
-            segment for segment in nombre_str.split("_") if segment)
+    nombre_str = _normalizar_segmento_identificador(nombre)
 
     base_id = f"{estado_str}{codigo_str}"
     if not nombre_str:
         return base_id
 
     return f"{base_id}_{nombre_str}"
+
+
+def _normalizar_segmento_identificador(texto: object | None) -> str:
+    """Normalize free text into a slug-like identifier segment."""
+    if pd.isna(texto):
+        return ""
+
+    texto_limpio = limpiar_texto(texto)
+    texto_segmentado = "".join(char if char.isalnum() else "_" for char in texto_limpio)
+    return "_".join(segment for segment in texto_segmentado.split("_") if segment)
+
+
+def generar_id_unico_municipio(
+    estado_id: object,
+    municipio_id: object,
+    nombre_municipio: object | None,
+) -> str:
+    """Build a municipality UID using state id, municipality id, and normalized name."""
+    if pd.isna(estado_id) or pd.isna(municipio_id) or pd.isna(nombre_municipio):
+        return ""
+
+    estado_str = str(estado_id).strip().zfill(2)
+    municipio_str = str(municipio_id).strip().zfill(3)
+    municipio_nombre_str = _normalizar_segmento_identificador(nombre_municipio)
+    if not municipio_nombre_str:
+        return ""
+
+    return f"{estado_str}-{municipio_str}-{municipio_nombre_str}"
 
 
 def guardar_errores_en_archivo(
@@ -62,8 +83,7 @@ def guardar_errores_en_archivo(
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with output_file.open("a", encoding="utf-8") as file_handle:
         file_handle.write(f"\n--- Run: {timestamp} ---\n")
-        file_handle.write(
-            f"Postal codes without geometry: {len(codigos_no_encontrados)}\n")
+        file_handle.write(f"Postal codes without geometry: {len(codigos_no_encontrados)}\n")
         for postal_code in sorted(codigos_no_encontrados):
             file_handle.write(f"  {postal_code}\n")
 

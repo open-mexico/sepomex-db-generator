@@ -6,7 +6,11 @@ import logging
 
 import pandas as pd
 
-from src.utils import generar_id_codigo_postal, limpiar_texto
+from src.utils import (
+    generar_id_codigo_postal,
+    generar_id_unico_municipio,
+    limpiar_texto,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,8 +32,7 @@ def _validate_required_columns(df_crudo: pd.DataFrame) -> None:
     missing_columns = sorted(REQUIRED_COLUMNS - set(df_crudo.columns))
     if missing_columns:
         missing_text = ", ".join(missing_columns)
-        raise ValueError(
-            f"Input DataFrame is missing required columns: {missing_text}")
+        raise ValueError(f"Input DataFrame is missing required columns: {missing_text}")
 
 
 def normalizar_datos(
@@ -66,12 +69,19 @@ def normalizar_datos(
     estados = estados.drop_duplicates().sort_values(by="id")
 
     municipios = df[["municipio_id", "D_mnpio", "estado_id"]].copy()
-    municipios = municipios.rename(
-        columns={"municipio_id": "id", "D_mnpio": "nombre"})
-    municipios = municipios.drop_duplicates().sort_values(by=[
-        "estado_id", "id"])
-    municipios["nombre_normalizado"] = municipios["nombre"].apply(
-        limpiar_texto)
+    municipios = municipios.rename(columns={"municipio_id": "id", "D_mnpio": "nombre"})
+    municipios = municipios.sort_values(by=["estado_id", "id", "nombre"])
+    municipios["nombre_normalizado"] = municipios["nombre"].apply(limpiar_texto)
+    municipios["municipio_uid"] = municipios.apply(
+        lambda row: generar_id_unico_municipio(
+            row["estado_id"],
+            row["id"],
+            row["nombre"],
+        ),
+        axis=1,
+    )
+    municipios = municipios.drop_duplicates(subset=["municipio_uid"], keep="first")
+    municipios = municipios[["id", "nombre", "estado_id", "municipio_uid", "nombre_normalizado"]]
 
     colonias_columns = [
         "codigo",
@@ -81,13 +91,37 @@ def normalizar_datos(
         "zona",
         "estado_id",
         "municipio_id",
+        "D_mnpio",
     ]
     colonias = df[colonias_columns].copy()
+    colonias["municipio_uid"] = colonias.apply(
+        lambda row: generar_id_unico_municipio(
+            row["estado_id"],
+            row["municipio_id"],
+            row["D_mnpio"],
+        ),
+        axis=1,
+    )
     colonias["codigo_id"] = colonias.apply(
-        lambda row: generar_id_codigo_postal(
-            row["estado_id"], row["codigo"], row["nombre"]),
+        lambda row: generar_id_codigo_postal(row["estado_id"], row["codigo"], row["nombre"]),
         axis=1,
     )
     colonias["nombre_normalizado"] = colonias["nombre"].apply(limpiar_texto)
+    colonias = colonias.sort_values(by=["estado_id", "municipio_id", "codigo", "nombre"])
+    colonias = colonias.drop_duplicates(subset=["codigo_id"], keep="first")
+    colonias = colonias[
+        [
+            "codigo",
+            "nombre",
+            "tipo",
+            "ciudad",
+            "zona",
+            "estado_id",
+            "municipio_id",
+            "municipio_uid",
+            "codigo_id",
+            "nombre_normalizado",
+        ]
+    ]
 
     return estados, municipios, colonias

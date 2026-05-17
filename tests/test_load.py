@@ -9,7 +9,14 @@ from src.load import guardar_db_geo, guardar_db_postal
 def generar_datos_prueba():
     estados = pd.DataFrame({"id": ["01"], "nombre": ["Aguascalientes"]})
     municipios = pd.DataFrame(
-        {"id": ["001"], "nombre": ["Aguascalientes"], "estado_id": ["01"]})
+        {
+            "id": ["001"],
+            "nombre": ["Aguascalientes"],
+            "estado_id": ["01"],
+            "municipio_uid": ["01-001-aguascalientes"],
+            "nombre_normalizado": ["aguascalientes"],
+        }
+    )
 
     # Creamos DOS colonias con el MISMO código postal para probar la actualización masiva
     colonias = pd.DataFrame(
@@ -21,6 +28,7 @@ def generar_datos_prueba():
             "zona": ["Urbano", "Urbano"],
             "estado_id": ["01", "01"],
             "municipio_id": ["001", "001"],
+            "municipio_uid": ["01-001-aguascalientes", "01-001-aguascalientes"],
             "codigo_id": ["0120049_colonia_centro", "0120049_barrio_de_san_marcos"],
             "nombre_normalizado": ["colonia centro", "barrio de san marcos"],
         }
@@ -44,6 +52,7 @@ def test_guardar_db_postal_crea_indices(tmp_path):
 
         # Índices de colonias
         assert "idx_colonia_codigo_id" in indices
+        assert "idx_colonia_municipio_uid" in indices
         assert "idx_colonia_estado_codigo_id" in indices
         assert "idx_colonia_municipio_codigo_id" in indices
         assert "idx_colonia_codigo" in indices
@@ -57,11 +66,53 @@ def test_guardar_db_postal_crea_indices(tmp_path):
         assert "idx_colonia_municipio_codigo" in indices
         assert "idx_colonia_municipio_codigo_nombre_norm" in indices
         assert "idx_colonia_municipio_codigo_nombre" in indices
+        assert "idx_colonia_codigo_nombre_municipio_uid" in indices
 
         # Índices de municipios y estados
         assert "idx_municipio_estado" in indices
+        assert "idx_municipio_uid" in indices
         assert "idx_municipio_nombre" in indices
+        assert "idx_municipio_uid_nombre" in indices
         assert "idx_estado_nombre" in indices
+
+        cursor.execute("PRAGMA index_list('colonias');")
+        colonias_index_meta = {fila[1]: fila[2] for fila in cursor.fetchall()}
+        assert colonias_index_meta["idx_colonia_codigo_id"] == 1
+
+        cursor.execute("PRAGMA index_list('municipios');")
+        municipios_index_meta = {fila[1]: fila[2]
+                                 for fila in cursor.fetchall()}
+        assert municipios_index_meta["idx_municipio_uid"] == 1
+
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='view' AND name='vw_colonias_busqueda';"
+        )
+        assert cursor.fetchone() is not None
+
+        cursor.execute("PRAGMA table_info(vw_colonias_busqueda);")
+        columnas_vista = [fila[1] for fila in cursor.fetchall()]
+        assert "geometria" not in columnas_vista
+        assert "min_lon" not in columnas_vista
+
+        cursor.execute(
+            """
+            SELECT colonia_nombre, municipio_nombre
+            FROM vw_colonias_busqueda
+            WHERE codigo = ? AND colonia_nombre_normalizado = ?
+            """,
+            ("20049", "colonia centro"),
+        )
+        resultado = cursor.fetchone()
+        assert resultado == ("Colonia Centro", "Aguascalientes")
+
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM colonias c
+            JOIN municipios m ON c.municipio_uid = m.municipio_uid
+            """
+        )
+        assert cursor.fetchone()[0] == 2
 
 
 def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
@@ -111,6 +162,46 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
         assert "idx_colonia_centro" in indices, "El índice idx_colonia_centro debe existir"
         assert "idx_colonia_estado_bbox" in indices
         assert "idx_colonia_municipio_bbox" in indices
+        assert "idx_colonia_municipio_uid" in indices
+        assert "idx_municipio_uid" in indices
+
+        cursor.execute("PRAGMA index_list('colonias');")
+        colonias_index_meta = {fila[1]: fila[2] for fila in cursor.fetchall()}
+        assert colonias_index_meta["idx_colonia_codigo_id"] == 1
+
+        cursor.execute("PRAGMA index_list('municipios');")
+        municipios_index_meta = {fila[1]: fila[2]
+                                 for fila in cursor.fetchall()}
+        assert municipios_index_meta["idx_municipio_uid"] == 1
+
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='view' AND name='vw_colonias_busqueda';"
+        )
+        assert cursor.fetchone() is not None
+
+        cursor.execute("PRAGMA table_info(vw_colonias_busqueda);")
+        columnas_vista = [fila[1] for fila in cursor.fetchall()]
+        assert "geometria" in columnas_vista
+        assert "min_lon" in columnas_vista
+        assert "centro_lat" in columnas_vista
+
+        cursor.execute(
+            """
+            SELECT geometria, min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat
+            FROM vw_colonias_busqueda
+            WHERE codigo_id = ?
+            """,
+            ("0120049_colonia_centro",),
+        )
+        resultado_vista_geo = cursor.fetchone()
+        assert resultado_vista_geo is not None
+        assert resultado_vista_geo[0] is not None
+        assert resultado_vista_geo[1] == -102.325
+        assert resultado_vista_geo[2] == 21.890
+        assert resultado_vista_geo[3] == -102.321
+        assert resultado_vista_geo[4] == 21.893
+        assert resultado_vista_geo[5] is not None
+        assert resultado_vista_geo[6] is not None
 
         # 2. Verificar que AMBAS colonias con el CP 20049 recibieron la geometría
         cursor.execute(
@@ -269,6 +360,7 @@ def test_guardar_db_geo_log_errores_en_flujo_completo(tmp_path):
                     "zona": ["Urbano", "Urbano"],
                     "estado_id": ["01", "01"],
                     "municipio_id": ["001", "001"],
+                    "municipio_uid": ["01-001-aguascalientes", "01-001-aguascalientes"],
                     "codigo_id": ["0199999_colonia_ficticia", "0188888_barrio_inexistente"],
                     "nombre_normalizado": ["colonia ficticia", "barrio inexistente"],
                 }

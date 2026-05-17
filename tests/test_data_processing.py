@@ -20,8 +20,14 @@ def test_normalizar_datos_generates_expected_relational_tables(
     assert estados.iloc[0]["id"] == "09"
 
     assert list(municipios.columns) == [
-        "id", "nombre", "estado_id", "nombre_normalizado"]
+        "id",
+        "nombre",
+        "estado_id",
+        "municipio_uid",
+        "nombre_normalizado",
+    ]
     assert len(municipios) == 1
+    assert municipios.iloc[0]["municipio_uid"] == "09-010-alvaro_obregon"
     assert municipios.iloc[0]["nombre_normalizado"] == "alvaro obregon"
 
     assert list(colonias.columns) == [
@@ -32,8 +38,10 @@ def test_normalizar_datos_generates_expected_relational_tables(
         "zona",
         "estado_id",
         "municipio_id",
+        "municipio_uid",
         "codigo_id",
         "nombre_normalizado",
     ]
     assert len(colonias) == 2
+    assert colonias.iloc[0]["municipio_uid"] == "09-010-alvaro_obregon"
     assert colonias.iloc[0]["codigo_id"] == "0901000_san_angel"

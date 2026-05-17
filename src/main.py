@@ -33,10 +33,8 @@ def main() -> None:
     df_crudo = descargar_datos_sepomex(sepomex_url)
     estados, municipios, colonias = normalizar_datos(df_crudo)
 
-    guardar_db_postal(estados, municipios, colonias,
-                      output_dir / "db_postal.sqlite")
-    guardar_db_geo(estados, municipios, colonias,
-                   output_dir / "db_geo.sqlite", geojson_path)
+    guardar_db_postal(estados, municipios, colonias, output_dir / "db_postal.sqlite")
+    guardar_db_geo(estados, municipios, colonias, output_dir / "db_geo.sqlite", geojson_path)
     logging.info("Databases generated successfully in %s", output_dir)
 
 

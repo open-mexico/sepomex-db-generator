@@ -35,7 +35,8 @@ def configurar_sqlite_para_carga(conn: sqlite3.Connection) -> None:
 def crear_indices(conn: sqlite3.Connection) -> None:
     """Create high-performance relational indexes."""
     index_statements = [
-        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo_id ON colonias(codigo_id);",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_colonia_codigo_id ON colonias(codigo_id);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_uid ON colonias(municipio_uid);",
         "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo_id ON "
         "colonias(estado_id, codigo_id);",
         "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo_id ON "
@@ -66,12 +67,63 @@ def crear_indices(conn: sqlite3.Connection) -> None:
         "colonias(municipio_id, codigo, nombre_normalizado);",
         "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo_nombre ON "
         "colonias(municipio_id, codigo, nombre COLLATE NOCASE);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo_nombre_municipio_uid ON "
+        "colonias(codigo, nombre_normalizado, municipio_uid);",
         "CREATE INDEX IF NOT EXISTS idx_municipio_estado ON municipios(estado_id);",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_municipio_uid ON municipios(municipio_uid);",
         "CREATE INDEX IF NOT EXISTS idx_municipio_nombre ON municipios(nombre COLLATE NOCASE);",
+        "CREATE INDEX IF NOT EXISTS idx_municipio_uid_nombre ON "
+        "municipios(municipio_uid, nombre COLLATE NOCASE);",
         "CREATE INDEX IF NOT EXISTS idx_estado_nombre ON estados(nombre COLLATE NOCASE);",
     ]
     for statement in index_statements:
         conn.execute(statement)
+
+
+def crear_vista_busqueda_colonias(
+    conn: sqlite3.Connection,
+    incluir_geometria: bool = False,
+) -> None:
+    """Create a denormalized search view for colony lookups with municipality names."""
+    columnas = [
+        "c.codigo_id",
+        "c.codigo",
+        "c.nombre AS colonia_nombre",
+        "c.nombre_normalizado AS colonia_nombre_normalizado",
+        "c.tipo",
+        "c.ciudad",
+        "c.zona",
+        "c.estado_id",
+        "c.municipio_id",
+        "c.municipio_uid",
+        "m.nombre AS municipio_nombre",
+        "m.nombre_normalizado AS municipio_nombre_normalizado",
+    ]
+    if incluir_geometria:
+        columnas.extend(
+            [
+                "c.geometria",
+                "c.min_lon",
+                "c.min_lat",
+                "c.max_lon",
+                "c.max_lat",
+                "c.centro_lon",
+                "c.centro_lat",
+            ]
+        )
+
+    columnas_sql = ",\n            ".join(columnas)
+    conn.execute("DROP VIEW IF EXISTS vw_colonias_busqueda")
+    conn.execute(
+        f"""
+        CREATE VIEW vw_colonias_busqueda AS
+        SELECT
+            {columnas_sql}
+        FROM colonias c
+        LEFT JOIN municipios m
+            ON c.municipio_uid = m.municipio_uid
+        """
+    )
 
 
 def crear_indices_geo(conn: sqlite3.Connection) -> None:
@@ -134,6 +186,7 @@ def guardar_db_postal(
         )
 
         crear_indices(conn)
+        crear_vista_busqueda_colonias(conn)
 
 
 def guardar_db_geo(
@@ -283,6 +336,7 @@ def guardar_db_geo(
 
         crear_indices(conn)
         crear_indices_geo(conn)
+        crear_vista_busqueda_colonias(conn, incluir_geometria=True)
         conn.commit()
 
         LOGGER.info("Injected geometry into %d settlement rows",

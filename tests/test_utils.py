@@ -1,4 +1,9 @@
-from src.utils import calcular_centroide, generar_id_codigo_postal, limpiar_texto
+from src.utils import (
+    calcular_centroide,
+    generar_id_codigo_postal,
+    generar_id_unico_municipio,
+    limpiar_texto,
+)
 
 
 def test_calcular_centroide_valores_validos():
@@ -64,3 +69,16 @@ def test_generar_id_codigo_postal_distingue_colonias_mismo_cp_y_estado():
     assert id_1 == "0120049_colonia_centro"
     assert id_2 == "0120049_barrio_de_san_marcos"
     assert id_1 != id_2
+
+
+def test_generar_id_unico_municipio_formato_estable() -> None:
+    """Municipality unique id must normalize state/municipality with fixed padding."""
+    assert generar_id_unico_municipio("9", "10", "Álvaro Obregón") == "09-010-alvaro_obregon"
+    assert generar_id_unico_municipio("09", "010", "Alvaro Obregon") == "09-010-alvaro_obregon"
+
+
+def test_generar_id_unico_municipio_retorna_vacio_si_hay_nulos() -> None:
+    """Missing state or municipality should produce an empty identifier."""
+    assert generar_id_unico_municipio(None, "010", "Alvaro Obregon") == ""
+    assert generar_id_unico_municipio("09", None, "Alvaro Obregon") == ""
+    assert generar_id_unico_municipio("09", "010", None) == ""

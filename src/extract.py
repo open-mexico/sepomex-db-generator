@@ -28,9 +28,7 @@ def descargar_datos_sepomex(url: str) -> pd.DataFrame:
             sep="|",
             encoding="ISO-8859-1",
             skiprows=[0],
-            dtype={"d_codigo": "string",
-                   "c_estado": "string", "c_mnpio": "string"},
+            dtype={"d_codigo": "string", "c_estado": "string", "c_mnpio": "string"},
         )
     except (pd.errors.EmptyDataError, pd.errors.ParserError, OSError) as error:
-        raise ValueError(
-            f"Could not load SEPOMEX data from '{url}': {error}") from error
+        raise ValueError(f"Could not load SEPOMEX data from '{url}': {error}") from error
