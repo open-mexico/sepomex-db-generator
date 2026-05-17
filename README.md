@@ -79,6 +79,86 @@ el uso de snapshots estaticos desactualizados y facilitando su integracion en si
 └── requirements-dev.txt      # Development and QA dependencies
 ```
 
+## Estructura dase de datos
+
+> [!IMPORTANT]  
+> Esta es el diagrama completo con los datos geometricos (GeoJSON).
+
+
+```mermaid
+classDiagram
+direction BT
+
+class colonias {
+    codigo : text
+    nombre : text
+    tipo : text
+    ciudad : text
+    zona : text
+    estado_id : text
+    municipio_id : text
+    municipio_uid : text
+    codigo_id : text
+    nombre_normalizado : text
+    geometria : text
+    min_lon : real
+    min_lat : real
+    max_lon : real
+    max_lat : real
+    centro_lon : real
+    centro_lat : real
+}
+
+class estados {
+    id : text
+    nombre : text
+}
+
+class municipios {
+    id : text
+    nombre : text
+    estado_id : text
+    municipio_uid : text
+    nombre_normalizado : text
+}
+
+class sqlite_master {
+    type : text
+    name : text
+    tbl_name : text
+    rootpage : int
+    sql : text
+}
+
+class vw_colonias_busqueda {
+    codigo_id : text
+    codigo : text
+    colonia_nombre : text
+    colonia_nombre_normalizado : text
+    tipo : text
+    ciudad : text
+    zona : text
+    estado_id : text
+    municipio_id : text
+    municipio_uid : text
+    municipio_nombre : text
+    municipio_nombre_normalizado : text
+    geometria : text
+    min_lon : real
+    min_lat : real
+    max_lon : real
+    max_lat : real
+    centro_lon : real
+    centro_lat : real
+}
+
+colonias --> estados : "estado_id"
+colonias --> municipios : "municipio_id"
+municipios --> estados : "estado_id"
+vw_colonias_busqueda --> estados : "estado_id"
+vw_colonias_busqueda --> municipios : "municipio_id"
+```
+
 ## Instalacion y Uso
 
 ### 1. Clonar el repositorio
