@@ -1,10 +1,109 @@
-[tool.black]
-line-length = 130
-target-version = ["py312"]
+[build-system]
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "base-datos-postales"
+version = "0.1.0"
+description = "ETL pipeline to build relational and geospatial postal-code SQLite databases for Mexico."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "BSD-3-Clause" }
+authors = [
+	{ name = "Open Mexico Contributors" }
+]
+dependencies = [
+	"pandas>=2.2.0,<3.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+	"mkdocs>=1.6.0",
+	"mkdocstrings[python]>=0.30.0",
+	"poethepoet>=0.32.0",
+	"pre-commit>=3.7.0",
+	"pytest>=8.3.0",
+	"pytest-cov>=5.0.0",
+	"ruff>=0.11.0"
+]
+
+[project.scripts]
+mexpost-etl = "src.main:main"
 
 [tool.ruff]
-line-length = 130
-target-version = "py312"
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+	"dist",
+	"datos_geojson"
+]
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = [
+	"ANN",
+	"B",
+	"C4",
+	"D",
+	"E",
+	"F",
+	"I",
+	"N",
+	"RET",
+	"SIM",
+	"T20",
+	"UP",
+	"W"
+]
+ignore = [
+	"D203",
+	"D213"
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+	"ANN",
+	"D",
+	"E501",
+	"S101"
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra --strict-markers --strict-config --cov=src --cov-report=term-missing --cov-report=xml --cov-fail-under=80"
+markers = [
+	"data: tests focused on data validation and transformation behavior",
+	"slow: tests that are computationally expensive or use larger fixtures"
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+
+[tool.poe.tasks]
+check.sequence = [
+	"ruff check .",
+	"ruff format --check .",
+	"pytest"
+]
+
+fix.sequence = [
+	"ruff check --fix .",
+	"ruff format ."
+]
+
+docs = "mkdocs build --strict"

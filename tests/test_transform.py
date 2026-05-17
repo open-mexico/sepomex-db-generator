@@ -30,14 +30,22 @@ def test_normalizar_datos_elimina_duplicados_y_separa_tablas():
 
     # 4. Verificamos Municipios
     assert len(municipios) == 1, "Debe eliminar los municipios duplicados"
-    assert list(municipios.columns) == [
-        "id", "nombre", "estado_id", "nombre_normalizado"]
+    assert list(municipios.columns) == ["id", "nombre", "estado_id", "nombre_normalizado"]
     assert municipios.iloc[0]["estado_id"] == "09"
 
     # 5. Verificamos Colonias
     assert len(colonias) == 2, "Debe mantener todas las colonias"
-    columnas_esperadas = ["codigo", "nombre", "tipo", "ciudad", "zona",
-                          "estado_id", "municipio_id", "codigo_id", "nombre_normalizado"]
+    columnas_esperadas = [
+        "codigo",
+        "nombre",
+        "tipo",
+        "ciudad",
+        "zona",
+        "estado_id",
+        "municipio_id",
+        "codigo_id",
+        "nombre_normalizado",
+    ]
     assert list(colonias.columns) == columnas_esperadas
     assert colonias.iloc[0]["codigo"] == "01000"
     assert colonias.iloc[0]["codigo_id"] == "0901000_san_angel"

@@ -1,0 +1,21 @@
+site_name: MexPost Data ETL
+site_description: Documentation for the SEPOMEX postal ETL pipeline.
+site_url: https://example.com/mexpost-data
+repo_url: https://github.com/open-mexico/sepomex-db-generator
+repo_name: open-mexico/sepomex-db-generator
+theme:
+  name: material
+nav:
+  - Home: docs/index.md
+  - Notebook Guide: docs/nb_guide.md
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true

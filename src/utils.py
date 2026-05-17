@@ -1,42 +1,44 @@
-import os
-import pandas as pd
-from datetime import datetime
+"""Utility helpers for text normalization, identifiers, and geometry metadata."""
+
+from __future__ import annotations
+
 import unicodedata
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
 
 
-def limpiar_texto(texto):
-    """
-    Convierte a minúsculas y elimina acentos/diacríticos de un texto
-    para facilitar comparaciones y búsquedas.
-
-    No se usa `unaccent` de SQLite ya que puede requerir configuración adicional
-    """
+def limpiar_texto(texto: object) -> str:
+    """Normalize text by lowercasing and removing accents/diacritics."""
     if pd.isna(texto):
         return ""
 
-    # Quita los acentos usando unicodedata
     texto_nfd = unicodedata.normalize("NFD", str(texto))
-    # Filtra y se queda solo con los caracteres base (quita el "´")
     texto_limpio = "".join(
-        c for c in texto_nfd if unicodedata.category(c) != "Mn")
+        char for char in texto_nfd if unicodedata.category(char) != "Mn")
     return texto_limpio.lower().strip()
 
 
-def generar_id_codigo_postal(estado_id, codigo, nombre=None):
-    """Genera un ID estable por combinación estado + código postal + nombre de colonia."""
+def generar_id_codigo_postal(
+    estado_id: object,
+    codigo: object,
+    nombre: object | None = None,
+) -> str:
+    """Build a stable identifier from state id, postal code, and settlement name."""
     if pd.isna(estado_id) or pd.isna(codigo):
         return ""
 
     estado_str = str(estado_id).strip().zfill(2)
     codigo_str = str(codigo).strip().zfill(5)
 
-    # El nombre ayuda a diferenciar colonias distintas con el mismo CP en el mismo estado.
     nombre_str = ""
     if not pd.isna(nombre):
         nombre_limpio = limpiar_texto(nombre)
-        nombre_str = "".join(c if c.isalnum() else "_" for c in nombre_limpio)
+        nombre_str = "".join(char if char.isalnum()
+                             else "_" for char in nombre_limpio)
         nombre_str = "_".join(
-            segmento for segmento in nombre_str.split("_") if segmento)
+            segment for segment in nombre_str.split("_") if segment)
 
     base_id = f"{estado_str}{codigo_str}"
     if not nombre_str:
@@ -45,25 +47,34 @@ def generar_id_codigo_postal(estado_id, codigo, nombre=None):
     return f"{base_id}_{nombre_str}"
 
 
-def guardar_errores_en_archivo(codigos_no_encontrados: set, ruta_base: str = "dist"):
-    """Guarda códigos postales sin geometría en un archivo de log en el directorio de salida."""
+def guardar_errores_en_archivo(
+    codigos_no_encontrados: set[str],
+    ruta_base: str | Path = "dist",
+) -> None:
+    """Persist missing postal-code geometry information to a log file."""
     if not codigos_no_encontrados:
         return
 
-    os.makedirs(ruta_base, exist_ok=True)
-    ruta_archivo = os.path.join(ruta_base, "db_geo_errores.log")
+    output_dir = Path(ruta_base)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / "db_geo_errores.log"
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(ruta_archivo, "a", encoding="utf-8") as f:
-        f.write(f"\n--- Ejecución: {timestamp} ---\n")
-        f.write(
-            f"Códigos postales sin geometría: {len(codigos_no_encontrados)}\n")
-        for cp in sorted(codigos_no_encontrados):
-            f.write(f"  {cp}\n")
+    with output_file.open("a", encoding="utf-8") as file_handle:
+        file_handle.write(f"\n--- Run: {timestamp} ---\n")
+        file_handle.write(
+            f"Postal codes without geometry: {len(codigos_no_encontrados)}\n")
+        for postal_code in sorted(codigos_no_encontrados):
+            file_handle.write(f"  {postal_code}\n")
 
 
-def calcular_centroide(min_lon, min_lat, max_lon, max_lat):
-
+def calcular_centroide(
+    min_lon: float | None,
+    min_lat: float | None,
+    max_lon: float | None,
+    max_lat: float | None,
+) -> tuple[float | None, float | None]:
+    """Compute centroid coordinates from a bounding box."""
     if min_lon is None or min_lat is None or max_lon is None or max_lat is None:
         return None, None
 

@@ -81,7 +81,10 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
                 "type": "Feature",
                 # Ojo: Es un número entero en tu archivo
                 "properties": {"d_codigo": 20049},
-                "geometry": {"type": "Polygon", "coordinates": [[[-102.321, 21.890], [-102.325, 21.893]]]},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[-102.321, 21.890], [-102.325, 21.893]]],
+                },
                 "bbox": [-102.325, 21.890, -102.321, 21.893],
             }
         ],
@@ -101,7 +104,9 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
         # 1. Verificar índices de GeoJSON
         cursor.execute("SELECT name FROM sqlite_master WHERE type='index';")
         indices = [fila[0] for fila in cursor.fetchall()]
-        assert "idx_colonia_geo_not_null" in indices, "El índice idx_colonia_geo_not_null debe existir"
+        assert "idx_colonia_geo_not_null" in indices, (
+            "El índice idx_colonia_geo_not_null debe existir"
+        )
         assert "idx_colonia_bbox" in indices, "El índice idx_colonia_bbox debe existir"
         assert "idx_colonia_centro" in indices, "El índice idx_colonia_centro debe existir"
         assert "idx_colonia_estado_bbox" in indices
@@ -120,7 +125,17 @@ def test_guardar_db_geo_actualiza_por_codigo_postal(tmp_path):
                               "0120049_barrio_de_san_marcos"}
 
         for fila in resultados:
-            nombre, codigo_id, geometria_guardada, min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat = fila
+            (
+                nombre,
+                codigo_id,
+                geometria_guardada,
+                min_lon,
+                min_lat,
+                max_lon,
+                max_lat,
+                centro_lon,
+                centro_lat,
+            ) = fila
             assert geometria_guardada is not None, f"La colonia {nombre} no recibió geometría"
 
             geo_dict = json.loads(geometria_guardada)
@@ -154,13 +169,19 @@ def test_guardar_db_geo_no_pierde_bbox_si_hay_duplicados_incompletos(tmp_path):
             {
                 "type": "Feature",
                 "properties": {"d_codigo": 20049},
-                "geometry": {"type": "Polygon", "coordinates": [[[-102.321, 21.890], [-102.325, 21.893]]]},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[-102.321, 21.890], [-102.325, 21.893]]],
+                },
                 "bbox": [-102.325, 21.890, -102.321, 21.893],
             },
             {
                 "type": "Feature",
                 "properties": {"d_codigo": 20049},
-                "geometry": {"type": "Polygon", "coordinates": [[[-102.320, 21.891], [-102.324, 21.894]]]},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[-102.320, 21.891], [-102.324, 21.894]]],
+                },
                 # Este duplicado no trae bbox y no debe borrar datos válidos anteriores
             },
         ],
@@ -175,7 +196,8 @@ def test_guardar_db_geo_no_pierde_bbox_si_hay_duplicados_incompletos(tmp_path):
     with sqlite3.connect(ruta_db) as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat FROM colonias WHERE codigo = '20049'")
+            "SELECT min_lon, min_lat, max_lon, max_lat, centro_lon, centro_lat FROM colonias WHERE codigo = '20049'"
+        )
         resultados = cursor.fetchall()
 
         assert len(resultados) == 2
@@ -193,7 +215,6 @@ def test_guardar_db_geo_crea_log_de_errores(tmp_path):
     """Si hay CPs sin geometría, se genera un archivo de log."""
     from src.utils import guardar_errores_en_archivo
 
-    ruta_log = tmp_path / "errores.log"
     codigos_faltantes = {"12345", "67890", "11111"}
 
     # Pasamos el directorio donde guardar el log
@@ -204,11 +225,11 @@ def test_guardar_db_geo_crea_log_de_errores(tmp_path):
     assert archivo_log.exists()
 
     contenido = archivo_log.read_text(encoding="utf-8")
-    assert "Códigos postales sin geometría: 3" in contenido
+    assert "Postal codes without geometry: 3" in contenido
     assert "12345" in contenido
     assert "67890" in contenido
     assert "11111" in contenido
-    assert "Ejecución:" in contenido
+    assert "Run:" in contenido
 
 
 def test_guardar_db_geo_log_errores_en_flujo_completo(tmp_path):
@@ -267,4 +288,4 @@ def test_guardar_db_geo_log_errores_en_flujo_completo(tmp_path):
     contenido = archivo_log_esperado.read_text(encoding="utf-8")
     assert "99999" in contenido
     assert "88888" in contenido
-    assert "Códigos postales sin geometría: 2" in contenido
+    assert "Postal codes without geometry: 2" in contenido

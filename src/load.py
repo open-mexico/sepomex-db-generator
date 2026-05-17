@@ -1,130 +1,160 @@
-import glob
+"""Load stage that writes normalized data into SQLite targets."""
+
+from __future__ import annotations
+
 import json
-import os
+import logging
 import sqlite3
+from pathlib import Path
 
 import pandas as pd
 
-from utils import calcular_centroide, guardar_errores_en_archivo
+from src.utils import calcular_centroide, guardar_errores_en_archivo
+
+LOGGER = logging.getLogger(__name__)
+
+GeoPayload = tuple[
+    str,
+    float | None,
+    float | None,
+    float | None,
+    float | None,
+    float | None,
+    float | None,
+]
 
 
-def configurar_sqlite_para_carga(conn: sqlite3.Connection):
-    """Ajustes seguros para acelerar cargas batch en procesos ETL locales."""
+def configurar_sqlite_para_carga(conn: sqlite3.Connection) -> None:
+    """Apply SQLite pragmas to speed up local batch ETL loads."""
     conn.execute("PRAGMA journal_mode = OFF;")
     conn.execute("PRAGMA synchronous = OFF;")
     conn.execute("PRAGMA temp_store = MEMORY;")
     conn.execute("PRAGMA cache_size = -200000;")
 
 
-def crear_indices(conn):
-    """Función auxiliar para crear todos los índices de alto rendimiento en la BD."""
-    # Índices para la tabla Colonias
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo_id ON colonias(codigo_id);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo_id ON colonias(estado_id, codigo_id);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo_id ON colonias(municipio_id, codigo_id);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo ON colonias(codigo);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_nombre ON colonias(nombre COLLATE NOCASE);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo_nombre ON colonias(codigo, nombre COLLATE NOCASE);")
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_nombre_norm ON colonias(nombre_normalizado);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo_nombre_norm ON colonias(codigo, nombre_normalizado);")
-
-    # Índices Compuestos (Para búsquedas filtradas por estado)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_nombre ON colonias(estado_id, nombre COLLATE NOCASE);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_nombre_norm ON colonias(estado_id, nombre_normalizado);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo ON colonias(estado_id, codigo);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo_nombre_norm ON colonias(estado_id, codigo, nombre_normalizado);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo_nombre ON colonias(estado_id, codigo, nombre COLLATE NOCASE);")
-
-    # Índices Compuestos (Para búsquedas filtradas por municipio)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_nombre ON colonias(municipio_id, nombre COLLATE NOCASE);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_nombre_norm ON colonias(municipio_id, nombre_normalizado);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo ON colonias(municipio_id, codigo);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo_nombre_norm ON colonias(municipio_id, codigo, nombre_normalizado);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo_nombre ON colonias(municipio_id, codigo, nombre COLLATE NOCASE);")
-
-    # Índices para la tabla Municipios y Estados
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_municipio_estado ON municipios(estado_id);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_municipio_nombre ON municipios(nombre COLLATE NOCASE);")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_estado_nombre ON estados(nombre COLLATE NOCASE);")
+def crear_indices(conn: sqlite3.Connection) -> None:
+    """Create high-performance relational indexes."""
+    index_statements = [
+        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo_id ON colonias(codigo_id);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo_id ON "
+        "colonias(estado_id, codigo_id);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo_id ON "
+        "colonias(municipio_id, codigo_id);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo ON colonias(codigo);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_nombre ON colonias(nombre COLLATE NOCASE);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo_nombre ON "
+        "colonias(codigo, nombre COLLATE NOCASE);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_nombre_norm ON colonias(nombre_normalizado);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_codigo_nombre_norm ON "
+        "colonias(codigo, nombre_normalizado);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_nombre ON "
+        "colonias(estado_id, nombre COLLATE NOCASE);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_nombre_norm ON "
+        "colonias(estado_id, nombre_normalizado);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo ON colonias(estado_id, codigo);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo_nombre_norm ON "
+        "colonias(estado_id, codigo, nombre_normalizado);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_codigo_nombre ON "
+        "colonias(estado_id, codigo, nombre COLLATE NOCASE);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_nombre ON "
+        "colonias(municipio_id, nombre COLLATE NOCASE);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_nombre_norm ON "
+        "colonias(municipio_id, nombre_normalizado);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo ON "
+        "colonias(municipio_id, codigo);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo_nombre_norm ON "
+        "colonias(municipio_id, codigo, nombre_normalizado);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_codigo_nombre ON "
+        "colonias(municipio_id, codigo, nombre COLLATE NOCASE);",
+        "CREATE INDEX IF NOT EXISTS idx_municipio_estado ON municipios(estado_id);",
+        "CREATE INDEX IF NOT EXISTS idx_municipio_nombre ON municipios(nombre COLLATE NOCASE);",
+        "CREATE INDEX IF NOT EXISTS idx_estado_nombre ON estados(nombre COLLATE NOCASE);",
+    ]
+    for statement in index_statements:
+        conn.execute(statement)
 
 
-def crear_indices_geo(conn):
-    """Índices específicos para la tabla Colonias con geometría."""
-
-    # Filtro rápido para saber cuáles tienen mapa (Ej. ?solo_geo=true)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_geo_not_null ON colonias(codigo) WHERE geometria IS NOT NULL;")
-
-    # BBox: Para búsqueda por coordenadas (Geocodificación Inversa)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_bbox ON colonias(min_lat, max_lat, min_lon, max_lon);")
-
-    # Ideal si el frontend ya sabe en qué estado está el usuario y solo quiere colonias cercanas dentro de ese límite político.
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_bbox ON colonias(estado_id, min_lat, max_lat, min_lon, max_lon);")
-
-    # Extremadamente rápido si cruzamos coordenadas acotadas a un municipio en particular.
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_bbox ON colonias(municipio_id, min_lat, max_lat, min_lon, max_lon);"
-    )
-
-    # CENTROIDE: Para búsquedas de "Nearest Neighbors" (Cercanía) o clustering
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_colonia_centro ON colonias(centro_lat, centro_lon);")
+def crear_indices_geo(conn: sqlite3.Connection) -> None:
+    """Create indexes optimized for geospatial lookups."""
+    index_statements = [
+        "CREATE INDEX IF NOT EXISTS idx_colonia_geo_not_null ON "
+        "colonias(codigo) WHERE geometria IS NOT NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_bbox ON "
+        "colonias(min_lat, max_lat, min_lon, max_lon);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_estado_bbox ON "
+        "colonias(estado_id, min_lat, max_lat, min_lon, max_lon);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_municipio_bbox ON "
+        "colonias(municipio_id, min_lat, max_lat, min_lon, max_lon);",
+        "CREATE INDEX IF NOT EXISTS idx_colonia_centro ON colonias(centro_lat, centro_lon);",
+    ]
+    for statement in index_statements:
+        conn.execute(statement)
 
 
-def guardar_db_postal(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd.DataFrame, ruta_db: str):
-    """Crea la base de datos relacional ligera con índices."""
-    print(f"💾 Creando {ruta_db}...")
-    dir_salida = os.path.dirname(ruta_db)
-    if dir_salida:
-        os.makedirs(dir_salida, exist_ok=True)
-    if os.path.exists(ruta_db):
-        os.remove(ruta_db)
+def guardar_db_postal(
+    estados: pd.DataFrame,
+    municipios: pd.DataFrame,
+    colonias: pd.DataFrame,
+    ruta_db: str | Path,
+) -> None:
+    """Create the lightweight relational SQLite database with indexes."""
+    output_path = Path(ruta_db)
+    LOGGER.info("Building relational database at %s", output_path)
 
-    with sqlite3.connect(ruta_db) as conn:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.exists():
+        output_path.unlink()
+
+    with sqlite3.connect(output_path) as conn:
         configurar_sqlite_para_carga(conn)
 
-        estados.to_sql("estados", conn, if_exists="append",
-                       index=False, method="multi", chunksize=10_000)
-        municipios.to_sql("municipios", conn, if_exists="append",
-                          index=False, method="multi", chunksize=10_000)
-        colonias.to_sql("colonias", conn, if_exists="append",
-                        index=False, method="multi", chunksize=10_000)
+        estados.to_sql(
+            "estados",
+            conn,
+            if_exists="append",
+            index=False,
+            method="multi",
+            chunksize=10_000,
+        )
+        municipios.to_sql(
+            "municipios",
+            conn,
+            if_exists="append",
+            index=False,
+            method="multi",
+            chunksize=10_000,
+        )
+        colonias.to_sql(
+            "colonias",
+            conn,
+            if_exists="append",
+            index=False,
+            method="multi",
+            chunksize=10_000,
+        )
 
         crear_indices(conn)
 
 
-def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd.DataFrame, ruta_db: str, ruta_geojson: str):
-    """Crea la base de datos geoespacial inyectando los polígonos por Código Postal."""
-    print(f"🌍 Creando {ruta_db} y cruzando con GeoJSON...")
-    dir_salida = os.path.dirname(ruta_db)
-    if dir_salida:
-        os.makedirs(dir_salida, exist_ok=True)
-    if os.path.exists(ruta_db):
-        os.remove(ruta_db)
+def guardar_db_geo(
+    estados: pd.DataFrame,
+    municipios: pd.DataFrame,
+    colonias: pd.DataFrame,
+    ruta_db: str | Path,
+    ruta_geojson: str | Path,
+) -> None:
+    """Create the geospatial SQLite database by injecting GeoJSON geometries by postal code."""
+    output_path = Path(ruta_db)
+    geojson_path = Path(ruta_geojson)
+    LOGGER.info(
+        "Building geospatial database at %s using GeoJSON from %s",
+        output_path,
+        geojson_path,
+    )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.exists():
+        output_path.unlink()
 
     colonias_geo = colonias.copy()
     colonias_geo["geometria"] = None
@@ -135,81 +165,99 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
     colonias_geo["centro_lon"] = float("nan")
     colonias_geo["centro_lat"] = float("nan")
 
-    with sqlite3.connect(ruta_db) as conn:
+    with sqlite3.connect(output_path) as conn:
         configurar_sqlite_para_carga(conn)
 
-        estados.to_sql("estados", conn, if_exists="append",
-                       index=False, method="multi", chunksize=10_000)
-        municipios.to_sql("municipios", conn, if_exists="append",
-                          index=False, method="multi", chunksize=10_000)
-        colonias_geo.to_sql("colonias", conn, if_exists="append",
-                            index=False, method="multi", chunksize=10_000)
+        estados.to_sql(
+            "estados",
+            conn,
+            if_exists="append",
+            index=False,
+            method="multi",
+            chunksize=10_000,
+        )
+        municipios.to_sql(
+            "municipios",
+            conn,
+            if_exists="append",
+            index=False,
+            method="multi",
+            chunksize=10_000,
+        )
+        colonias_geo.to_sql(
+            "colonias",
+            conn,
+            if_exists="append",
+            index=False,
+            method="multi",
+            chunksize=10_000,
+        )
 
-        # Para la fase de UPDATE solo necesitamos el índice por código postal.
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_colonia_codigo ON colonias(codigo);")
 
         cursor = conn.cursor()
-        archivos = sorted(
-            glob.glob(f"{ruta_geojson}/**/*.geojson", recursive=True))
+        geojson_files = sorted(geojson_path.rglob("*.geojson"))
 
         total_actualizadas = 0
-        codigos_no_encontrados = set()
-        actualizaciones_por_cp = {}
+        codigos_no_encontrados: set[str] = set()
+        actualizaciones_por_cp: dict[str, GeoPayload] = {}
 
-        for archivo in archivos:
-            with open(archivo, "r", encoding="utf-8") as f:
-                datos = json.load(f)
-                for feature in datos.get("features", []):
-                    propiedades = feature.get("properties", {})
-                    geometria = feature.get("geometry", {})
-                    bbox = feature.get("bbox")
+        for geojson_file in geojson_files:
+            with geojson_file.open("r", encoding="utf-8") as file_handle:
+                data = json.load(file_handle)
 
-                    # Extraer el código postal (se llama 'd_codigo' en tu GeoJSON)
-                    cp_crudo = propiedades.get("d_codigo")
+            for feature in data.get("features", []):
+                properties = feature.get("properties", {})
+                geometry = feature.get("geometry", {})
+                bbox = feature.get("bbox")
 
-                    if cp_crudo is None:
-                        continue
+                cp_raw = properties.get("d_codigo")
+                if cp_raw is None:
+                    continue
 
-                    # Formatear a 5 dígitos
-                    cp_str = str(cp_crudo).zfill(5)
-                    geometria_json = json.dumps(geometria)
+                cp_str = str(cp_raw).zfill(5)
+                geometry_json = json.dumps(geometry)
 
-                    min_lon, min_lat, max_lon, max_lat = None, None, None, None
-                    centro_lon, centro_lat = None, None
+                min_lon: float | None = None
+                min_lat: float | None = None
+                max_lon: float | None = None
+                max_lat: float | None = None
+                centro_lon: float | None = None
+                centro_lat: float | None = None
 
-                    # Si el polígono trae BBox, extraemos los límites y calculamos el centro
-                    if bbox and len(bbox) == 4:
-                        min_lon, min_lat, max_lon, max_lat = bbox
-                        centro_lat, centro_lon = calcular_centroide(
-                            min_lon, min_lat, max_lon, max_lat)
-
-                    nuevo_payload = (
-                        geometria_json,
+                if bbox and len(bbox) == 4:
+                    min_lon, min_lat, max_lon, max_lat = bbox
+                    centro_lat, centro_lon = calcular_centroide(
                         min_lon,
                         min_lat,
                         max_lon,
                         max_lat,
-                        centro_lon,
-                        centro_lat,
                     )
-                    payload_existente = actualizaciones_por_cp.get(cp_str)
 
-                    if payload_existente is None:
-                        actualizaciones_por_cp[cp_str] = nuevo_payload
-                    else:
-                        # Conservamos el payload más completo (con BBox/centroide)
-                        bbox_existente = payload_existente[1:5]
-                        bbox_nuevo = nuevo_payload[1:5]
-                        existente_tiene_bbox = all(
-                            v is not None for v in bbox_existente)
-                        nuevo_tiene_bbox = all(
-                            v is not None for v in bbox_nuevo)
+                new_payload: GeoPayload = (
+                    geometry_json,
+                    min_lon,
+                    min_lat,
+                    max_lon,
+                    max_lat,
+                    centro_lon,
+                    centro_lat,
+                )
+                existing_payload = actualizaciones_por_cp.get(cp_str)
 
-                        if nuevo_tiene_bbox and not existente_tiene_bbox:
-                            actualizaciones_por_cp[cp_str] = nuevo_payload
+                if existing_payload is None:
+                    actualizaciones_por_cp[cp_str] = new_payload
+                    continue
 
-        # Ejecutamos solo una actualización por CP para evitar reescrituras repetidas.
+                existing_bbox = existing_payload[1:5]
+                new_bbox = new_payload[1:5]
+                existing_has_bbox = all(
+                    value is not None for value in existing_bbox)
+                new_has_bbox = all(value is not None for value in new_bbox)
+                if new_has_bbox and not existing_has_bbox:
+                    actualizaciones_por_cp[cp_str] = new_payload
+
         for cp_str, payload in actualizaciones_por_cp.items():
             cursor.execute(
                 """
@@ -218,33 +266,34 @@ def guardar_db_geo(estados: pd.DataFrame, municipios: pd.DataFrame, colonias: pd
                     min_lon = ?, min_lat = ?, max_lon = ?, max_lat = ?,
                     centro_lon = ?, centro_lat = ?
                 WHERE codigo = ?
-            """,
+                """,
                 (*payload, cp_str),
             )
 
-            filas_afectadas = cursor.rowcount
-            total_actualizadas += filas_afectadas
-
-            if filas_afectadas == 0:
+            rows_updated = cursor.rowcount
+            total_actualizadas += rows_updated
+            if rows_updated == 0:
                 codigos_no_encontrados.add(cp_str)
 
-        # Identificar CPs en la BD que nunca aparecieron en el GeoJSON
         cursor.execute("SELECT DISTINCT codigo FROM colonias")
-        todos_codigos_bd = {fila[0] for fila in cursor.fetchall()}
-        codigos_sin_geometria = todos_codigos_bd - \
+        all_postal_codes = {row[0] for row in cursor.fetchall()}
+        codigos_sin_geometria = all_postal_codes - \
             set(actualizaciones_por_cp.keys())
         codigos_no_encontrados.update(codigos_sin_geometria)
 
-        # Creamos el resto de índices al final para acelerar la carga inicial.
         crear_indices(conn)
         crear_indices_geo(conn)
-
         conn.commit()
-        print(f"🗺️ Se inyectó la geometría a {total_actualizadas} colonias.")
+
+        LOGGER.info("Injected geometry into %d settlement rows",
+                    total_actualizadas)
 
         if codigos_no_encontrados:
-            ruta_output_dir = os.path.dirname(ruta_db) or "dist"
-            guardar_errores_en_archivo(codigos_no_encontrados, ruta_output_dir)
-            print(
-                f"⚠️ No se encontraron geometrías para {len(codigos_no_encontrados)} códigos postales. Ver: {ruta_output_dir}/db_geo_errores.log"
+            output_dir = output_path.parent if str(
+                output_path.parent) else Path("dist")
+            guardar_errores_en_archivo(codigos_no_encontrados, output_dir)
+            LOGGER.warning(
+                "No geometry found for %d postal codes. See %s/db_geo_errores.log",
+                len(codigos_no_encontrados),
+                output_dir,
             )
